@@ -20,6 +20,8 @@ ENV/
 *.spec
 token.json
 *.log
+*.zip
+Canada28/dist/
 
 # 忽略构建文件
 build/
