@@ -49,12 +49,11 @@ jobs:
               Write-Warning "⚠️ Data folder not found in repository."
           }
           
-          # 压缩 dist 文件夹
-          Compress-Archive -Path "dist/*" -DestinationPath "Canada28Simulator_Package.zip"
-          Write-Host "✅ Package zipped."
-
+          # 由于 GitHub Action 上传 Artifact 时会自动打包成 ZIP，
+          # 所以这里不需要手动压缩，直接上传 dist 目录的内容即可
+          
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Canada28Simulator_Package
-          path: Canada28/Canada28Simulator_Package.zip
+          path: Canada28/dist/
