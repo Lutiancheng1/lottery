@@ -2383,6 +2383,26 @@ if __name__ == "__main__":
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     
+    # 动态调试模式:如果有 --debug 参数，则开启控制台和日志
+    if "--debug" in sys.argv:
+        try:
+            import ctypes
+            # 分配控制台窗口
+            ctypes.windll.kernel32.AllocConsole()
+            # 重定向标准输出到新控制台
+            sys.stdout = open("CONOUT$", "w", encoding='utf-8')
+            sys.stderr = open("CONOUT$", "w", encoding='utf-8')
+            print("🐛 调试模式已启动 (Console Attached)")
+            
+            # 开启日志系统
+            setup_logging()
+            
+            # 恢复 matplotlib 日志 (如果在 setup_logging 里被屏蔽了，这里可以根据需要放开)
+            # logging.getLogger('matplotlib').setLevel(logging.DEBUG) 
+            
+        except Exception as e:
+            pass # 即使失败也不影响主程序启动
+
     app = QApplication(sys.argv)
     window = Canada28Simulator()
     window.show()

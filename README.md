@@ -1,157 +1,91 @@
-# PC28彩票项目
+# PC28彩票项目 (GUI版)
 
 ## 📊 项目简介
 
-这是一个完整的PC28/加拿大28彩票数据分析和投注模拟系统，包含数据爬取、分析、实时模拟等功能。
+这是一个基于 **PyQt5** 重构的 PC28/加拿大28 彩票数据分析和投注模拟系统。
+相比旧版，新版拥有更现代的图形界面、内嵌浏览器、实时图表分析以及更强大的自动打包功能。
 
 ## 🎯 主要功能
 
-### 1. 数据爬取
-- [game_periods_gui_v2.py](game_periods_gui_v2.py) - V2版GUI爬虫（推荐）
-- 支持按页码范围爬取
-- 自动去重和数据整理
-- 完整的历史数据（2025-12-12至2026-01-11）
+### 1. 核心模拟器 (GUI)
+- **启动文件**: `Canada28/canada28_simulator_qt.py`
+- **功能**:
+    - 现代化 Dark Mode 界面
+    - 左侧集成 Web 浏览器 (兼容模式，防崩溃)
+    - 右侧实时数据表格 + 盈亏曲线图
+    - 支持 **“欠债还钱”** 资金策略 (回本优先)
+    - 完整的历史数据回测功能
 
-### 2. 实时投注模拟
-- [canada28_simulator.py](canada28_simulator.py) - 简化版模拟器（推荐）⭐
-- [live_betting_simulator_backup_3d.py](live_betting_simulator_backup_3d.py) - 原版模拟器（备份）
-- Token认证登录
-- 实时开奖数据获取
-- 智能投注策略（逐期对冲）
-- 盈亏曲线可视化
+### 2. 自动化打包
+- **脚本**: `Canada28/build_exe.py`
+- **功能**:
+    - 一键将 Python 代码打包成独立的 `.exe` 文件
+    - 自动复制 `Data` 文件夹
+    - 自动生成 `Canada28Simulator_Package.zip` 分发包
+    - 支持 `--debug` 调试模式 (创建快捷方式加参数即可开启黑框日志)
 
-### 3. 辅助工具
-- [token_extractor.py](token_extractor.py) - Token提取器
-- [dynamic_hot_pool.py](dynamic_hot_pool.py) - 动态号码池
-- [pc28_gui.py](pc28_gui.py) - PC28爬虫
+### 3. 数据与工具
+- **数据管理**: `Canada28/db_manager.py` (SQLite数据库)
+- **号码生成**: `Canada28/generate_top_combinations.py` (热号导出)
 
 ## 📁 项目结构
 
 ```
 .
-├── Canada_data/                    # 数据文件夹
-│   ├── final_complete_*.xlsx      # 完整历史数据
-│   └── final_complete_*.txt
-├── canada28_simulator.py          # ⭐ 简化版模拟器（推荐使用）
-├── game_periods_gui_v2.py         # ⭐ V2爬虫（推荐使用）
-├── token_extractor.py             # Token提取工具
-├── dynamic_hot_pool.py            # 动态号码池模块
-├── live_betting_simulator_backup_3d.py  # 原版模拟器
-├── pc28_gui.py                    # PC28爬虫
-├── 加拿大28模拟器使用说明.md     # 使用文档
-└── 动态号码池使用指南.md         # 号码池文档
+├── Canada28/                      # 核心代码目录
+│   ├── canada28_simulator_qt.py   # ⭐ 主程序 (运行这个)
+│   ├── build_exe.py               # ⭐ 打包脚本 (双击打包)
+│   ├── generate_top_combinations.py
+│   ├── db_manager.py
+│   ├── data_manager.py
+│   ├── Canada28Simulator.spec     # PyInstaller配置
+│   ├── Data/                      # 数据库和资源文件
+│   └── dist/                      # 打包输出目录 (exe在这里)
+├── .github/                       # GitHub Action 配置
+│   └── workflows/build_windows_exe.yml
+├── README.md                      # 项目说明
+└── requirements.txt               #Python依赖
 ```
 
 ## 🚀 快速开始
 
-### 1. 安装依赖
+### 1. 运行源码
 
 ```bash
+# 安装依赖
 pip install -r requirements.txt
+
+# 进入目录
+cd Canada28
+
+# 启动模拟器
+python canada28_simulator_qt.py
 ```
 
-主要依赖：
-- tkinter（GUI）
-- requests（网络请求）
-- pandas（数据处理）
-- matplotlib（图表）
-- openpyxl（Excel）
-- urllib3（SSL处理）
+### 2. 打包为EXE
 
-### 2. 使用简化版模拟器
+如果您想发给没有安装Python的朋友使用：
 
 ```bash
-python canada28_simulator.py
+cd Canada28
+python build_exe.py
 ```
+运行结束后，把生成的 **`Canada28Simulator_Package.zip`** 发给对方即可。
 
-**使用步骤：**
-1. 点击"🔑 登录"输入Token
-2. 导入号码文件
-3. 点击"▶ 开始模拟"
+## �️ 调试模式 (Debug)
 
-### 3. 获取Token
+如果打包后的程序在别人的电脑上打不开浏览器或白屏：
+1. 给 `.exe` 创建快捷方式。
+2. 属性 -> 目标 -> 末尾加空格和 `--debug`。
+3. 运行快捷方式，此时会弹出黑框和生成 `debug.log`，方便排查。
 
-```bash
-python token_extractor.py
-```
+## 📝 版本历史
 
-或手动获取：
-1. 浏览器访问 http://s1.pk999p.xyz/
-2. 登录账号
-3. F12打开开发者工具
-4. Network标签中找到请求
-5. 在Request Headers中复制token
+### v3.0 (Qt重构版)
+- ✅ 采用 PyQt5 + QWebEngine 重写界面
+- ✅ 解决浏览器兼容性问题 (No Sandbox)
+- ✅ 引入“欠债模式”资金策略
+- ✅ 完善的自动化构建流程
 
-### 4. 爬取数据
-
-```bash
-python game_periods_gui_v2.py
-```
-
-设置页码范围和日期过滤后开始爬取。
-
-## 📖 详细文档
-
-- [加拿大28模拟器使用说明](加拿大28模拟器使用说明.md)
-- [动态号码池使用指南](动态号码池使用指南.md)
-
-## 🔑 核心技术
-
-### API认证
-使用Token进行身份验证，支持自动过期检测。
-
-### 投注策略
-采用逐期对冲策略：
-- 输了：增加投注额（比例+固定）
-- 赢了：达到对冲条件后递减
-
-### 数据处理
-- 自动去重（基于期号）
-- 时间排序
-- 支持Excel和TXT导出
-
-## 📊 数据说明
-
-**历史数据：**
-- 时间范围：2025-12-12 至 2026-01-11
-- 总记录数：11,552条
-- 开奖间隔：约4分钟
-
-## ⚠️ 注意事项
-
-1. **Token有效期**：Token会过期，需定期更新
-2. **网络连接**：需要稳定的网络连接
-3. **风险提示**：投注模拟仅用于研究学习
-4. **数据备份**：定期备份数据到Canada_data文件夹
-
-## 🛠️ 开发信息
-
-- **开发工具**：Python 3.x
-- **GUI框架**：Tkinter
-- **数据处理**：Pandas
-- **可视化**：Matplotlib
-
-## 📝 更新日志
-
-### v2.0 (2026-01-12)
-- ✅ 创建简化版模拟器
-- ✅ 适配新API（Token认证）
-- ✅ 优化代码结构（650行）
-- ✅ 清理临时文件
-
-### v1.0 (2026-01-11)
-- ✅ 完成数据爬取
-- ✅ 数据去重合并
-- ✅ 创建GUI爬虫
-- ✅ 完成原版模拟器
-
-## 📧 联系方式
-
-如有问题，请提交Issue。
-
----
-
-**⭐ 推荐使用文件：**
-- `canada28_simulator.py` - 实时模拟
-- `game_periods_gui_v2.py` - 数据爬取
-- `token_extractor.py` - Token获取
+### v2.0
+- ✅ 命令行/Tkinter 版本 (已归档)
