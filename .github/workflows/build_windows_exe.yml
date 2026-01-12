@@ -1,0 +1,36 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: ['main', 'master']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller PyQt5 requests openpyxl matplotlib
+
+      - name: Build EXE
+        run: |
+          # 进入 Canada28 目录
+          cd Canada28
+          # 执行打包命令
+          pyinstaller --name="Canada28模拟器" --onefile --windowed --add-data="Data;Data" --hidden-import=PyQt5 --hidden-import=PyQt5.QtWebEngineWidgets --hidden-import=requests --hidden-import=openpyxl --hidden-import=matplotlib --collect-all=PyQt5 canada28_simulator_qt.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Canada28模拟器_Windows
+          path: Canada28/dist/Canada28模拟器.exe
