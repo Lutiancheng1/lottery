@@ -20,14 +20,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller PyQt5 PyQtWebEngine requests openpyxl matplotlib
+          pip install pyinstaller PyQt5 PyQtWebEngine requests openpyxl matplotlib pandas numpy
 
       - name: Build EXE
         run: |
           # 进入 Canada28 目录
           cd Canada28
           # 执行打包命令
-          pyinstaller --name="Canada28模拟器" --onefile --windowed --add-data="Data;Data" --hidden-import=PyQt5 --hidden-import=PyQt5.QtWebEngineWidgets --hidden-import=requests --hidden-import=openpyxl --hidden-import=matplotlib --collect-all=PyQt5 --collect-all=PyQtWebEngine canada28_simulator_qt.py
+          pyinstaller --name="Canada28模拟器" --onefile --windowed --add-data="Data;Data" --hidden-import=PyQt5 --hidden-import=PyQt5.QtWebEngineWidgets --hidden-import=requests --hidden-import=openpyxl --hidden-import=matplotlib --hidden-import=pandas --hidden-import=numpy --collect-all=PyQt5 --collect-all=PyQtWebEngine --collect-all=pandas canada28_simulator_qt.py
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
