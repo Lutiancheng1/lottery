@@ -2,6 +2,7 @@ import sys
 import json
 import os
 import requests
+import logging
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QSplitter, QFrame, QLabel, QPushButton, 
@@ -9,11 +10,67 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
                              QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
-from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread
+from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType
 from PyQt5.QtGui import QFont, QColor
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+
+# === 日志配置 ===
+def setup_logging():
+    """配置日志系统: 输出到文件和控制台"""
+    log_file = "debug.log"
+    
+    # 配置 Python logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        handlers=[
+            logging.FileHandler(log_file, mode='w', encoding='utf-8'),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    # 屏蔽 matplotlib 的调试信息
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    
+    # 重定向 stdout 和 stderr 到 logger
+    class StreamToLogger(object):
+        def __init__(self, logger, log_level=logging.INFO):
+            self.logger = logger
+            self.log_level = log_level
+            self.linebuf = ''
+
+        def write(self, buf):
+            for line in buf.rstrip().splitlines():
+                self.logger.log(self.log_level, line.rstrip())
+
+        def flush(self):
+            pass
+
+    sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
+    sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
+
+    # Qt 消息拦截 (捕获 WebEngine 报错)
+    def qt_message_handler(mode, context, message):
+        if mode == QtMsgType.QtInfoMsg:
+            logging.info(f"[Qt Info] {message}")
+        elif mode == QtMsgType.QtWarningMsg:
+            logging.warning(f"[Qt Warning] {message}")
+        elif mode == QtMsgType.QtCriticalMsg:
+            logging.error(f"[Qt Critical] {message}")
+        elif mode == QtMsgType.QtFatalMsg:
+            logging.critical(f"[Qt Fatal] {message}")
+        else:
+            logging.debug(f"[Qt Debug] {message}")
+
+    qInstallMessageHandler(qt_message_handler)
+    
+    logging.info("🚀 系统启动 - 日志初始化完成")
+    logging.info(f"Python版本: {sys.version}")
+    logging.info(f"工作目录: {os.getcwd()}")
+
+# 在顶层调用初始化
+# setup_logging() # 调试完成，关闭日志
 
 # 设置中文字体 (解决乱码问题)
 plt.rcParams['font.sans-serif'] = ['Arial Unicode MS', 'SimHei', 'PingFang SC', 'Heiti TC']
@@ -71,6 +128,9 @@ class BacktestWorker(QThread):
             max_profit_issue = ""
             min_profit = 0
             min_profit_issue = ""
+            
+            # 资金策略状态 (Debt Mode)
+            current_debt = 0.0
             
             stop_reason = ""
             
@@ -144,13 +204,29 @@ class BacktestWorker(QThread):
                     break
                     
                 # 动态调整注码
+                # 动态调整注码 (Debt Mode)
                 if is_win:
-                    # 赢了：递减
-                    current_unit_bet = current_unit_bet * (1 - decrease_rate)
-                    if current_unit_bet < 0.1: current_unit_bet = 0.1
+                    # 赢了：先还债
+                    if current_debt > 0:
+                        current_debt -= profit # profit是正数
+                        if current_debt < 0: current_debt = 0
+                        
+                        if current_debt > 0:
+                            # 债还没还完，维持高注码继续打
+                            pass 
+                        else:
+                            # 债还清了，重置回底注
+                            current_unit_bet = base_unit_bet
+                    else:
+                        # 无债状态：递减 (且不能低于底注)
+                        current_unit_bet = current_unit_bet * (1 - decrease_rate)
+                        if current_unit_bet < base_unit_bet: current_unit_bet = base_unit_bet
+                        if current_unit_bet < 0.1: current_unit_bet = 0.1
                 else:
-                    # 输了：递增
-                    fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
+                    # 输了：记账并递增
+                    loss_amount = abs(profit)
+                    current_debt += loss_amount
+                    
                     fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
                     current_unit_bet = current_unit_bet * (1 + increase_rate) + fixed_per_code
                     
@@ -200,6 +276,8 @@ class Canada28Simulator(QMainWindow):
         self.last_bet_period = None # 记录上次下单或尝试下单的期号，防止重复弹窗
         self.real_bet_results = {}  # 存储从API获取的真实账单记录 {period_no: {data}}
         self.token_expired_logged = False # 标记是否已记录Token过期日志，防止重复提示
+        self.current_debt = 0.0  # 当前累计欠款 (逐期回本模式)
+        self.base_bet_memory = 2.0 # 记忆初始底注
         
         # 初始化UI
         self.init_ui()
@@ -281,6 +359,22 @@ class Canada28Simulator(QMainWindow):
         
         # 浏览器控件
         self.browser = QWebEngineView()
+        
+        # === 浏览器调试信号 ===
+        self.browser.loadStarted.connect(lambda: logging.info("🔵 浏览器: 开始加载页面"))
+        self.browser.loadProgress.connect(lambda p: logging.info(f"🔵 浏览器: 加载进度 {p}%"))
+        self.browser.loadFinished.connect(lambda ok: logging.info(f"🔵 浏览器: 加载结束 - {'成功' if ok else '失败'}"))
+        self.browser.renderProcessTerminated.connect(
+            lambda t, e: logging.error(f"🔴 浏览器渲染进程崩溃! 类型:{t}, 代码:{e}")
+        )
+        
+        # SSL 检查
+        try:
+            import ssl
+            logging.info(f"🔐 OpenSSL版本: {ssl.OPENSSL_VERSION}")
+        except Exception as e:
+            logging.error(f"❌ 无法加载 SSL 模块: {e}")
+
         self.browser.setUrl(QUrl("http://s1.pk999p.xyz/"))
         self.browser_layout.addWidget(self.browser)
         
@@ -683,6 +777,15 @@ class Canada28Simulator(QMainWindow):
         self.lbl_min_profit.setStyleSheet("color: red; font-weight: bold;")
         layout.addWidget(self.lbl_min_profit)
         
+        layout.addSpacing(20)
+        
+        # 待对冲金额
+        layout.addWidget(QLabel("待回本欠款:"))
+        self.lbl_debt = QLabel("0.00")
+        self.lbl_debt.setStyleSheet("color: green; font-weight: bold;")
+        self.lbl_debt.setToolTip("累计未收回的亏损金额")
+        layout.addWidget(self.lbl_debt)
+        
         layout.addStretch()
         group.setLayout(layout)
         self.simulator_layout.addWidget(group)
@@ -725,8 +828,12 @@ class Canada28Simulator(QMainWindow):
 
     def get_config_path(self, filename):
         """获取配置文件的绝对路径"""
-        # 获取脚本所在目录
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的exe，使用exe所在目录
+            script_dir = os.path.dirname(sys.executable)
+        else:
+            # 获取脚本所在目录
+            script_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(script_dir, filename)
 
     def load_token(self):
@@ -1454,6 +1561,9 @@ class Canada28Simulator(QMainWindow):
             self.is_running = True
             # 重置首次确认标记
             self.first_bet_confirmed = False
+            # 记忆当前注码作为底注
+            self.base_bet_memory = self.spin_unit_bet.value()
+            self.log_run(f"🏁 开始运行，设定回本底注为: {self.base_bet_memory}")
             self.update_start_button_text()
             
             # === 立即检查是否需要下单 (针对当前期) ===
@@ -1706,21 +1816,22 @@ class Canada28Simulator(QMainWindow):
         # 1. 更新表格 (插入到第一行)
         self.table.insertRow(0)
         self.table.setItem(0, 0, QTableWidgetItem(record['period']))
-        self.table.setItem(0, 1, QTableWidgetItem(f"{record['draw_code']}")) # 开奖号码
-        self.table.setItem(0, 2, QTableWidgetItem(f"{record['bet']:.2f}"))   # 投入
-        self.table.setItem(0, 3, QTableWidgetItem(f"{record['unit_bet']:.2f}")) # 单注
+        self.table.setItem(0, 1, QTableWidgetItem(record.get('draw_time', '--'))) # 时间
+        self.table.setItem(0, 2, QTableWidgetItem(f"{record['draw_code']}")) # 开奖号码
+        self.table.setItem(0, 3, QTableWidgetItem(f"{record['bet']:.2f}"))   # 投入
+        self.table.setItem(0, 4, QTableWidgetItem(f"{record['unit_bet']:.2f}")) # 单注
         
         item_result = QTableWidgetItem("中奖" if record['is_win'] else "未中")
         item_result.setForeground(QColor("green") if record['is_win'] else QColor("red"))
-        self.table.setItem(0, 4, item_result)
+        self.table.setItem(0, 5, item_result)
         
         item_profit = QTableWidgetItem(f"{record['profit']:+.2f}")
         item_profit.setForeground(QColor("red") if record['profit'] < 0 else QColor("green"))
-        self.table.setItem(0, 5, item_profit)
+        self.table.setItem(0, 6, item_profit)
         
         item_total = QTableWidgetItem(f"{record['total_profit']:+.2f}")
         item_total.setForeground(QColor("red") if record['total_profit'] < 0 else QColor("green"))
-        self.table.setItem(0, 6, item_total)
+        self.table.setItem(0, 7, item_total)
         
         # 更新显示 (不再更新头部盈亏,头部只显示真实账户盈亏)
         
@@ -1832,6 +1943,8 @@ class Canada28Simulator(QMainWindow):
             self.lbl_max_bet.setText("0")
             self.lbl_max_profit.setText("0")
             self.lbl_min_profit.setText("0")
+            self.lbl_debt.setText("0.00")
+            self.current_debt = 0.0
             
             # 重置当前注码
             self.spin_unit_bet.setValue(2.0) # 恢复默认
@@ -1993,25 +2106,44 @@ class Canada28Simulator(QMainWindow):
             self.min_profit_period = period
             self.lbl_min_profit.setText(f"{new_total_profit:.2f} (第{period}期)")
         
-        # 6. 动态注码调整 (对冲逻辑)
+        # 6. 动态注码调整 (金额回本策略)
         if is_win:
-            # 赢了：递减
-            decrease_rate = self.spin_decrease_rate.value() / 100.0
-            new_unit_bet = unit_bet * (1 - decrease_rate)
-            # 保持最小金额
-            if new_unit_bet < 0.1: new_unit_bet = 0.1
-            self.spin_unit_bet.setValue(new_unit_bet)
+            # 赢了：先还债
+            if self.current_debt > 0:
+                self.current_debt -= profit # profit是正数
+                if self.current_debt < 0: self.current_debt = 0
+                
+                if self.current_debt > 0:
+                    self.log_run(f"🛡️ 赢且回血: 本期赢 {profit:.2f}, 剩余欠款 {self.current_debt:.2f}, 注码保持 {unit_bet:.2f}")
+                    # 注码不变，继续高位打回来
+                else:
+                    # 债还清了，重置回底注
+                    self.log_run(f"🎉 欠款已还清! 注码重置回 {self.base_bet_memory:.2f}")
+                    self.spin_unit_bet.setValue(self.base_bet_memory)
+            else:
+                # 本来就没债，正常递减或保持底注
+                decrease_rate = self.spin_decrease_rate.value() / 100.0
+                new_unit_bet = unit_bet * (1 - decrease_rate)
+                # 不能低于底注
+                if new_unit_bet < self.base_bet_memory: new_unit_bet = self.base_bet_memory
+                if new_unit_bet < 0.1: new_unit_bet = 0.1
+                
+                self.spin_unit_bet.setValue(new_unit_bet)
+                # self.log_run(f"📉 赢且递减: {unit_bet:.2f} -> {new_unit_bet:.2f}")
         else:
-            # 输了：递增
+            # 输了：记账并递增
+            # profit是负数, abs(profit)是亏损额
+            loss_amount = abs(profit)
+            self.current_debt += loss_amount
+            
             increase_rate = self.spin_increase_rate.value() / 100.0
             increase_fixed = self.spin_increase_fixed.value()
             
             # 计算新的总投入目标
-            # 新单注 = (当前单注 * (1+Rate)) + (Fixed / 号码数)
             fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
             new_unit_bet = unit_bet * (1 + increase_rate) + fixed_per_code
             
-            self.log_run(f"📉 输后调整: {unit_bet:.2f} -> {new_unit_bet:.2f} (Rate: {increase_rate*100}%, Fixed: {increase_fixed})")
+            self.log_run(f"📈 输且递增: {unit_bet:.2f} -> {new_unit_bet:.2f} (新增欠款 {loss_amount:.2f} -> 总欠 {self.current_debt:.2f})")
             
             # 检查最高单注限制
             if self.chk_max_unit_bet.isChecked():
@@ -2021,6 +2153,13 @@ class Canada28Simulator(QMainWindow):
                     self.log_run(f"⚠️ 触发最高单注限制: {max_val}")
             
             self.spin_unit_bet.setValue(new_unit_bet)
+            
+        # 更新欠款状态显示
+        self.lbl_debt.setText(f"{self.current_debt:.2f}")
+        if self.current_debt > 0:
+            self.lbl_debt.setStyleSheet("color: red; font-weight: bold;")
+        else:
+            self.lbl_debt.setStyleSheet("color: green; font-weight: bold;")
             
         # === 真实投注逻辑 (无论输赢都执行) ===
         if self.chk_real_bet.isChecked():
@@ -2232,9 +2371,16 @@ class Canada28Simulator(QMainWindow):
             self.log_run(f"❌ 查询详情异常: {e}")
             QMessageBox.critical(self, "错误", f"查询详情时发生异常: {e}")
 
+# === 全局配置 (放在 import 之后, App 初始化之前) ===
+# 解决 浏览器渲染进程崩溃 (代码:40) 的问题
+# 1. 禁用沙盒 (Sandbox): 解决权限/防病毒软件冲突
+# 2. 禁用 GPU 加速: 解决显卡驱动不兼容/虚拟机黑屏问题
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer"
+
 if __name__ == "__main__":
-    # macOS WebEngine 崩溃修复
-    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+    # 高分屏适配
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     
     app = QApplication(sys.argv)

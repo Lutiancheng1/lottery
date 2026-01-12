@@ -47,11 +47,11 @@ def build_exe():
     # PyInstaller命令
     cmd = [
         'pyinstaller',
-        '--name=Canada28模拟器',
+        '--name=Canada28Simulator',
         '--onefile',  # 单文件模式
-        '--windowed',  # 无控制台窗口
-        '--icon=NONE',  # 如果有图标可以指定
-        '--add-data=Canada_data:Canada_data',  # 包含数据文件
+        '--noconsole',  # 无控制台窗口
+        '--clean',    # 清理缓存
+        '--hidden-import=generate_top_combinations', # 关键：包含动态导入的模块
         '--hidden-import=PyQt5',
         '--hidden-import=PyQt5.QtWebEngineWidgets',
         '--hidden-import=requests',
@@ -81,6 +81,9 @@ def build_exe():
         sys.exit(1)
 
 if __name__ == "__main__":
+    # 切换工作目录到脚本所在目录
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    
     print("Canada28模拟器 - EXE打包工具\n")
     
     # 检查依赖
@@ -93,4 +96,31 @@ if __name__ == "__main__":
     # 开始打包
     build_exe()
     
+    # 复制数据文件
+    print("\n📦 正在复制最新的数据文件到 dist 目录...")
+    src_data = "Data"
+    dst_data = os.path.join("dist", "Data")
+    if os.path.exists(src_data):
+        if os.path.exists(dst_data):
+            shutil.rmtree(dst_data)
+        shutil.copytree(src_data, dst_data)
+        print(f"✅ 已将 {src_data} (包含数据库) 复制到 {dst_data}")
+    else:
+        print(f"⚠️ 未找到 {src_data} 目录，跳过复制")
+    
     print("\n✨ 全部完成!")
+    
+    # 自动压缩为ZIP方便分发
+    print("\n📦 正在生成最终压缩包...")
+    zip_name = "Canada28Simulator_Package"
+    try:
+        # 分发包名称
+        dist_dir = "dist"
+        if os.path.exists(dist_dir):
+            shutil.make_archive(zip_name, 'zip', dist_dir)
+            print(f"✅ 已生成分发包: {zip_name}.zip")
+            print(f"👉 您可以直接把这个 {zip_name}.zip 发给别人")
+        else:
+            print("❌ 未找到 dist 目录，无法压缩")
+    except Exception as e:
+        print(f"❌ 压缩失败: {e}")

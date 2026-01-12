@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import json
 import requests
@@ -12,7 +13,10 @@ class CanadaDataManager:
     
     def __init__(self, data_dir="Data"):
         # 确保 data_dir 是相对于当前脚本的路径 (Canada28/Data)
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
         self.data_dir = os.path.join(base_dir, data_dir)
         
         if not os.path.exists(self.data_dir):

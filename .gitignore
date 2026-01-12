@@ -17,6 +17,8 @@ ENV/
 
 # 忽略临时文件
 *.tmp
+*.spec
+token.json
 *.log
 
 # 忽略构建文件
@@ -37,3 +39,4 @@ simulator_config.json
 # 保留数据文件夹但忽略具体数据（可选）
 # Canada_data/*.xlsx
 # Canada_data/*.txt
+Canada_data/*.spec

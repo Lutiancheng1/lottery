@@ -1,11 +1,17 @@
 import sqlite3
+import sys
 import os
 from datetime import datetime
 
 class DBManager:
     def __init__(self, db_name="Data/canada28.db"):
         # 确保 db_name 是相对于当前脚本的路径 (Canada28/Data/canada28.db)
-        base_dir = os.path.dirname(os.path.abspath(__file__))
+        # 确保 db_name 是相对于当前脚本的路径 (Canada28/Data/canada28.db)
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            
         self.db_name = os.path.join(base_dir, db_name)
         
         # 确保目录存在
