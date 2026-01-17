@@ -42,3 +42,13 @@ simulator_config.json
 # Canada_data/*.xlsx
 # Canada_data/*.txt
 Canada_data/*.spec
+
+# 忽略授权文件
+license.key
+*.key
+
+# 忽略构建过程文件
+Canada28/build/
+Canada28/dist/
+Canada28/Package_Temp/
+Canada28/KeyGen_Temp/

@@ -4,13 +4,14 @@ import sqlite3
 from collections import Counter
 from db_manager import DBManager
 
-def export_top_combinations(filepath, count=875):
+def export_top_combinations(filepath, count=875, is_pure=True):
     """
     导出出现频率最高的号码组合
     
     Args:
         filepath: 保存路径
         count: 导出数量 (Top N)
+        is_pure: 是否为纯数字模式
         
     Returns:
         (bool, str): (是否成功, 消息)
@@ -25,7 +26,6 @@ def export_top_combinations(filepath, count=875):
             
         # 2. 统计组合频率
         # row: (period_no, draw_time, num1, num2, num3, result_sum, raw_line)
-        # 我们需要 num1, num2, num3 组成 3位数字字符串
         combinations = []
         for row in rows:
             try:
@@ -46,16 +46,31 @@ def export_top_combinations(filepath, count=875):
         counter = Counter(combinations)
         
         # 4. 获取 Top N
-        # most_common 返回 List[Tuple[element, count]]
         top_items = counter.most_common(count)
         
         # 5. 提取号码
         result_numbers = [item[0] for item in top_items]
         
         # 6. 写入文件
-        # 为了兼容导入格式，使用逗号分隔
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(", ".join(result_numbers))
+            if is_pure:
+                # 纯数字模式
+                f.write(", ".join(result_numbers))
+            else:
+                # 详细模式
+                f.write(f"# 热门组合导出 (Top {count})\n")
+                f.write(f"# 基于历史 {len(rows)} 期数据统计\n")
+                f.write("-" * 30 + "\n")
+                
+                # 只是号码
+                f.write(", ".join(result_numbers))
+                f.write("\n\n")
+                f.write("-" * 30 + "\n")
+                
+                # 详细频次
+                f.write("号码\t出现的次数\n")
+                for item in top_items:
+                    f.write(f"{item[0]}\t{item[1]}\n")
             
         return True, f"成功导出 Top {len(result_numbers)} 热门号码 (基于 {len(rows)} 期历史)"
         

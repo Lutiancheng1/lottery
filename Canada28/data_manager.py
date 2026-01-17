@@ -232,11 +232,12 @@ class CanadaDataManager:
         pages_needed = (gap + 13) // 14
         print(f"📥 需要获取 {pages_needed} 页数据（共约{gap}期）...")
         for page in range(1, pages_needed + 1):
+            print(f"📡 正在获取第 {page}/{pages_needed} 页...")
             data = self.fetch_remote_history(page=page, limit=14)
             if data and 'data' in data:
                 missing_data.extend(data['data'])
             if page < pages_needed:
-                time.sleep(0.3)
+                time.sleep(1.0)  # 优化: 改为1秒延迟，避免频繁请求导致卡顿和服务器压力
         missing_data.reverse()
         return missing_data[-gap:]
 

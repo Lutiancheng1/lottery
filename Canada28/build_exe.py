@@ -44,41 +44,49 @@ def build_exe():
     print("🚀 开始打包Canada28模拟器")
     print("="*50 + "\n")
     
-    # PyInstaller命令
-    cmd = [
+    # --- 1. 打包主程序 (模拟器) ---
+    print("\n" + "-"*30)
+    print("📦 打包主程序 [Canada28Simulator]...")
+    cmd_main = [
         'pyinstaller',
         '--name=Canada28Simulator',
-        '--onefile',  # 单文件模式
-        '--noconsole',  # 无控制台窗口
-        '--clean',    # 清理缓存
-        '--hidden-import=generate_top_combinations', # 关键：包含动态导入的模块
+        '--onefile',
+        '--noconsole',
+        '--clean',
+        '--hidden-import=generate_top_combinations',
+        '--hidden-import=license_manager',
+        '--hidden-import=activate_dialog',
         '--hidden-import=PyQt5',
         '--hidden-import=PyQt5.QtWebEngineWidgets',
         '--hidden-import=requests',
-        '--hidden-import=openpyxl',
-        '--hidden-import=matplotlib',
-        '--hidden-import=numpy',
         '--collect-all=PyQt5',
         'canada28_simulator_qt.py'
     ]
+    subprocess.check_call(cmd_main)
+    print("✅ 主程序打包成功")
     
-    print("📦 执行打包命令...")
-    print(f"命令: {' '.join(cmd)}\n")
+    # --- 2. 打包注册机 (管理员工具) ---
+    print("\n" + "-"*30)
+    print("📦 打包注册机 [KeyGen_Admin]...")
+    cmd_keygen = [
+        'pyinstaller',
+        '--name=KeyGen_Admin',
+        '--onefile',
+        '--noconsole',
+        '--clean',
+        '--hidden-import=license_manager',
+        '--hidden-import=PyQt5',
+        'keygen.py'
+    ]
+    subprocess.check_call(cmd_keygen)
+    print("✅ 注册机打包成功")
     
-    try:
-        subprocess.check_call(cmd)
-        print("\n" + "="*50)
-        print("✅ 打包成功!")
-        print("="*50)
-        print("\n📁 可执行文件位置: dist/Canada28模拟器.exe")
-        print("\n💡 提示:")
-        print("   - 生成的EXE文件同时支持x64和x86系统")
-        print("   - 首次运行可能需要较长时间")
-        print("   - 请将Canada_data文件夹放在EXE同目录下")
-        
-    except subprocess.CalledProcessError as e:
-        print(f"\n❌ 打包失败: {e}")
-        sys.exit(1)
+    print("\n" + "="*50)
+    print("🎉 所有打包任务完成!")
+    print("="*50)
+    print("\n📁 输出目录: dist/")
+    print("   1. Canada28Simulator.exe (发给客户)")
+    print("   2. KeyGen_Admin.exe (管理员自用)")
 
 if __name__ == "__main__":
     # 切换工作目录到脚本所在目录
@@ -111,15 +119,49 @@ if __name__ == "__main__":
     print("\n✨ 全部完成!")
     
     # 自动压缩为ZIP方便分发
-    print("\n📦 正在生成最终压缩包...")
-    zip_name = "Canada28Simulator_Package"
+    print("\n📦 正在生成客户分发包 (不含注册机)...")
+    zip_name = "Canada28Simulator_Client"
     try:
-        # 分发包名称
         dist_dir = "dist"
         if os.path.exists(dist_dir):
-            shutil.make_archive(zip_name, 'zip', dist_dir)
-            print(f"✅ 已生成分发包: {zip_name}.zip")
-            print(f"👉 您可以直接把这个 {zip_name}.zip 发给别人")
+            # 创建一个临时目录用于打包
+            package_dir = os.path.join(dist_dir, "Package_Temp")
+            if os.path.exists(package_dir):
+                shutil.rmtree(package_dir)
+            os.makedirs(package_dir)
+            
+            # 1. 复制主程序
+            shutil.copy2(os.path.join(dist_dir, "Canada28Simulator.exe"), package_dir)
+            
+            # 2. 复制数据文件夹
+            src_data = os.path.join(dist_dir, "Data")
+            dst_data = os.path.join(package_dir, "Data")
+            if os.path.exists(src_data):
+                shutil.copytree(src_data, dst_data)
+                
+            # 3. 压缩这个临时目录
+            shutil.make_archive(zip_name, 'zip', package_dir)
+            
+            # 4. 清理临时目录
+            shutil.rmtree(package_dir)
+            
+            print(f"✅ 已生成客户专用包: {zip_name}.zip (仅含模拟器和数据)")
+            print(f"👉 注册机 KeyGen_Admin.exe 仍在 dist 目录下，请单独保存")
+            
+            # --- 额外：单独打包注册机 ---
+            print("\n📦 正在生成注册机独立包...")
+            keygen_zip = "KeyGen_Admin_Tool"
+            keygen_temp = os.path.join(dist_dir, "KeyGen_Temp")
+            if os.path.exists(keygen_temp):
+                shutil.rmtree(keygen_temp)
+            os.makedirs(keygen_temp)
+            
+            if os.path.exists(os.path.join(dist_dir, "KeyGen_Admin.exe")):
+                shutil.copy2(os.path.join(dist_dir, "KeyGen_Admin.exe"), keygen_temp)
+                shutil.make_archive(keygen_zip, 'zip', keygen_temp)
+                shutil.rmtree(keygen_temp)
+                print(f"✅ 已生成管理员包: {keygen_zip}.zip (仅含注册机)")
+            
         else:
             print("❌ 未找到 dist 目录，无法压缩")
     except Exception as e:

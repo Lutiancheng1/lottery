@@ -3,12 +3,13 @@ import json
 import os
 import requests
 import logging
+import time
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QSplitter, QFrame, QLabel, QPushButton, 
                              QLineEdit, QTextEdit, QMessageBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
-                             QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog)
+                             QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType
 from PyQt5.QtGui import QFont, QColor
@@ -78,6 +79,130 @@ plt.rcParams['axes.unicode_minus'] = False
 
 # 导入数据管理器
 from data_manager import CanadaDataManager
+
+
+class DataSyncWorker(QThread):
+    """数据同步工作线程（后台执行，不阻塞UI）"""
+    progress_signal = pyqtSignal(str)  # 进度提示信号
+    finished_signal = pyqtSignal(bool)  # 完成信号(成功/失败)
+    
+    def __init__(self, data_manager):
+        super().__init__()
+        self.data_manager = data_manager
+        
+    def run(self):
+        try:
+            success = self.data_manager.sync_historical_data()
+            self.finished_signal.emit(success)
+        except Exception as e:
+            self.progress_signal.emit(f"同步失败: {e}")
+            self.finished_signal.emit(False)
+
+
+class AccountSyncWorker(QThread):
+    """账单同步工作线程（避免主线程阻塞）"""
+    progress_signal = pyqtSignal(str)  # 进度提示信号
+    finished_signal = pyqtSignal(float, dict)  # 完成信号(总盈亏, 账单数据)
+    error_signal = pyqtSignal(str)  # 错误信号
+    
+    def __init__(self, token, cookie):
+        super().__init__()
+        self.token = token
+        self.cookie = cookie
+        
+    def run(self):
+        try:
+            import requests
+            import datetime
+            
+            total_profit = 0.0
+            page = 1
+            limit = 50
+            real_bet_results = {}
+            
+            # 第一阶段：获取所有期号的盈亏统计
+            while True:
+                url = f"http://s1.pk999p.xyz/index.php/Reports/LPeriod?game_id=2&page={page}&limit={limit}"
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "token": self.token,
+                    "Cookie": self.cookie
+                }
+                
+                self.progress_signal.emit(f"📡 请求第 {page} 页数据...")
+                
+                response = requests.get(url, headers=headers, timeout=10)
+                if response.status_code != 200:
+                    self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
+                    break
+                    
+                res_json = response.json()
+                if res_json.get("code") != 0:
+                    self.error_signal.emit(f"API错误: {res_json.get('msg')}")
+                    break
+                    
+                data_list = res_json.get("data", [])
+                last_page = res_json.get("last_page", 1)
+                
+                # 累加盈亏并存储记录
+                for item in data_list:
+                    p_no = str(item.get("period_no"))
+                    if p_no not in real_bet_results:
+                        real_bet_results[p_no] = {
+                            'total_bet': float(item.get("bet", 0)),
+                            'unit_bet': 0.0,
+                            'win_amount': float(item.get("win_money", 0)),
+                            'profit': float(item.get("profit_loss", 0)),
+                            'total_profit': 0.0,
+                            'is_real': True
+                        }
+                    
+                    pl = float(item.get("profit_loss", 0))
+                    total_profit += pl
+                
+                if page >= last_page:
+                    break
+                    
+                page += 1
+                
+            # 第二阶段：获取最近20期的详细明细
+            self.progress_signal.emit("🔍 正在获取近期下单明细...")
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            
+            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:20]
+            for idx, p_no in enumerate(recent_periods):
+                try:
+                    self.progress_signal.emit(f"🔍 获取第{p_no}期明细 ({idx+1}/{len(recent_periods)})")
+                    detail_url = f"http://s1.pk999p.xyz/index.php/Orders/LOrder?game_id=2&date={today}&period_no={p_no}&status=0&order_no=&page=1&limit=50"
+                    detail_res = requests.get(detail_url, headers=headers, timeout=5)
+                    if detail_res.status_code == 200:
+                        detail_json = detail_res.json()
+                        if detail_json.get("code") == 0:
+                            orders = detail_json.get("data", [])
+                            if orders:
+                                t_bet = 0.0
+                                t_prize = 0.0
+                                u_bet = 0.0
+                                for o in orders:
+                                    t_bet += float(o.get("CM", 0))
+                                    t_prize += float(o.get("CM_prize", 0))
+                                    if u_bet == 0: 
+                                        u_bet = float(o.get("CM", 0))
+                                
+                                if p_no in real_bet_results:
+                                    real_bet_results[p_no]['total_bet'] = t_bet
+                                    real_bet_results[p_no]['unit_bet'] = u_bet
+                                    real_bet_results[p_no]['win_amount'] = t_prize
+                                    real_bet_results[p_no]['profit'] = t_prize - t_bet
+                except:
+                    continue
+            
+            self.finished_signal.emit(total_profit, real_bet_results)
+            
+        except Exception as e:
+            self.error_signal.emit(f"同步异常: {str(e)}")
+
 
 
 class BacktestWorker(QThread):
@@ -212,7 +337,21 @@ class BacktestWorker(QThread):
                         if current_debt < 0: current_debt = 0
                         
                         if current_debt > 0:
-                            # 债还没还完，维持高注码继续打
+                            # 债还没还完
+                            # 新逻辑: 赢了也要递减 (D'Alembert策略 / 用户要求的阶梯回落)
+                            
+                            # 1. 扣除固定加注部分
+                            fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
+                            if fixed_per_code > 0:
+                                current_unit_bet -= fixed_per_code
+                                
+                            # 2. 扣除比例递减 (如果设置了赢-递减)
+                            if decrease_rate > 0:
+                                current_unit_bet = current_unit_bet * (1 - decrease_rate)
+                                
+                            # 3. 兜底: 不能低于底注
+                            if current_unit_bet < base_unit_bet:
+                                current_unit_bet = base_unit_bet
                             pass 
                         else:
                             # 债还清了，重置回底注
@@ -256,6 +395,123 @@ class BacktestWorker(QThread):
     def stop(self):
         self.is_running = False
 
+
+class TokenValidateWorker(QThread):
+    """Token验证工作线程（避免启动时阻塞UI）"""
+    success_signal = pyqtSignal(dict)  # 验证成功信号，传递remote_latest数据
+    failed_signal = pyqtSignal()       # 验证失败信号
+    
+    def __init__(self, data_manager):
+        super().__init__()
+        self.data_manager = data_manager
+        
+    def run(self):
+        try:
+            print("🔍 正在通过请求历史数据验证Token...")
+            remote_latest = self.data_manager.get_remote_latest()
+            
+            if remote_latest:
+                print("✅ Token验证成功 (历史数据请求成功)")
+                self.success_signal.emit(remote_latest)
+            else:
+                print("⚠️ Token已过期或无效 (历史数据请求失败)")
+                self.failed_signal.emit()
+        except Exception as e:
+            print(f"❌ Token验证异常: {e}")
+            self.failed_signal.emit()
+
+
+class BettingWorker(QThread):
+    """真实投注工作线程（避免下注时阻塞UI）"""
+    success_signal = pyqtSignal(str, str)   # 成功信号(期号, 消息)
+    error_signal = pyqtSignal(str)          # 错误信号(错误消息)
+    balance_low_signal = pyqtSignal()       # 余额不足信号
+    
+    def __init__(self, token, cookie, period, my_numbers, unit_bet):
+        super().__init__()
+        self.token = token
+        self.cookie = cookie
+        self.period = period
+        self.my_numbers = my_numbers
+        self.unit_bet = unit_bet
+        
+    def run(self):
+        try:
+            import requests
+            
+            # 构造 o_datas
+            o_datas_list = []
+            for num in self.my_numbers:
+                o_datas_list.append(f"16:{num}:{self.unit_bet}")
+            o_datas = ",".join(o_datas_list)
+            
+            total_money = len(self.my_numbers) * self.unit_bet
+            
+            # 发送请求
+            url = "http://s1.pk999p.xyz/index.php/Orders/COrders"
+            data = {
+                "type": "import",
+                "game_id": "2",
+                "period_no": self.period,
+                "t_datas": "16",
+                "o_datas": o_datas,
+                "position": "txt导入"
+            }
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+                "X-Requested-With": "XMLHttpRequest",
+                "token": self.token,
+                "Cookie": self.cookie
+            }
+            
+            print(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}")
+            response = requests.post(url, data=data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                res_json = response.json()
+                code = res_json.get("code")
+                
+                if code == 0:
+                    msg = res_json.get('msg', '下单成功')
+                    self.success_signal.emit(self.period, msg)
+                elif code == 9:
+                    # 余额不足
+                    self.balance_low_signal.emit()
+                else:
+                    error_msg = res_json.get('msg', '未知错误')
+                    self.error_signal.emit(f"API返回错误: {error_msg}")
+            else:
+                self.error_signal.emit(f"HTTP {response.status_code}")
+                
+        except Exception as e:
+            self.error_signal.emit(f"下单异常: {str(e)}")
+
+
+class RealtimeDataWorker(QThread):
+    """实时数据获取工作线程（避免定时刷新时阻塞UI）"""
+    success_signal = pyqtSignal(dict)  # 成功信号，传递realtime_data
+    failed_signal = pyqtSignal(str)    # 失败信号，传递错误信息
+    
+    def __init__(self, data_manager):
+        super().__init__()
+        self.data_manager = data_manager
+        
+    def run(self):
+        try:
+            realtime_data = self.data_manager.get_realtime_data()
+            if realtime_data:
+                self.success_signal.emit(realtime_data)
+            else:
+                # 返回None可能是Token过期，也可能是网络问题
+                self.failed_signal.emit("empty_response")
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ 获取实时数据失败: {error_msg}")
+            # 传递具体错误信息，便于判断是否真的Token过期
+            self.failed_signal.emit(error_msg)
+
+
 class Canada28Simulator(QMainWindow):
     """Canada28 模拟器主窗口 (PyQt5版)"""
     
@@ -278,6 +534,9 @@ class Canada28Simulator(QMainWindow):
         self.token_expired_logged = False # 标记是否已记录Token过期日志，防止重复提示
         self.current_debt = 0.0  # 当前累计欠款 (逐期回本模式)
         self.base_bet_memory = 2.0 # 记忆初始底注
+        
+        # 性能优化：添加请求状态标志，防止并发请求导致UI卡顿
+        self.is_refreshing_data = False  # 防止refresh_data并发调用
         
         # 初始化UI
         self.init_ui()
@@ -440,7 +699,8 @@ class Canada28Simulator(QMainWindow):
         
     def create_control_tabs(self):
         """创建控制选项卡"""
-        tabs = QTabWidget()
+        self.tabs = QTabWidget()
+        self.tabs.currentChanged.connect(self.on_tab_changed)
         
         # Tab 1: 运行控制
         tab_run = QWidget()
@@ -540,11 +800,138 @@ class Canada28Simulator(QMainWindow):
         run_layout.addWidget(self.txt_run_log)
         
         # run_layout.addStretch()
-        tabs.addTab(tab_run, "运行控制")
+        self.tabs.addTab(tab_run, "运行控制")
         
-        # Tab 2: 号码导入
-        tab_import = QWidget()
-        import_layout = QVBoxLayout(tab_import)
+        # === 新增：合并"设置与号码" Tab ===
+        # === 新增：合并"设置与号码" Tab ===
+        tab_combined = QWidget()
+        combined_layout = QVBoxLayout(tab_combined)
+        
+        # 使用Splitter上下分隔
+        settings_splitter = QSplitter(Qt.Vertical)
+        
+        # --- 上半部分: 参数设置 ---
+        settings_widget = QWidget()
+        settings_layout = QVBoxLayout(settings_widget)
+        settings_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 基础设置
+        grp_basic = QGroupBox("基础设置")
+        layout_basic = QVBoxLayout()
+        
+        # 赔率
+        h1 = QHBoxLayout()
+        h1.addWidget(QLabel("中奖赔率:"))
+        self.spin_payout = QDoubleSpinBox()
+        self.spin_payout.setRange(0, 10000)
+        self.spin_payout.setValue(995.0)
+        h1.addWidget(self.spin_payout)
+        layout_basic.addLayout(h1)
+        
+        # 单注金额
+        h2 = QHBoxLayout()
+        h2.addWidget(QLabel("初始单注:"))
+        self.spin_unit_bet = QDoubleSpinBox()
+        self.spin_unit_bet.setRange(0.1, 10000)
+        self.spin_unit_bet.setSingleStep(0.1)
+        self.spin_unit_bet.setValue(0.1)
+        h2.addWidget(self.spin_unit_bet)
+        layout_basic.addLayout(h2)
+        
+        # 最高单注限制
+        h3_basic = QHBoxLayout()
+        self.chk_max_unit_bet = QCheckBox("启用最高单注限制:")
+        self.chk_max_unit_bet.setChecked(True)
+        h3_basic.addWidget(self.chk_max_unit_bet)
+        
+        self.spin_max_unit_bet = QDoubleSpinBox()
+        self.spin_max_unit_bet.setRange(0.1, 100000)
+        self.spin_max_unit_bet.setSingleStep(0.1)  # 支持0.1步进
+        self.spin_max_unit_bet.setValue(10.0)
+        h3_basic.addWidget(self.spin_max_unit_bet)
+        layout_basic.addLayout(h3_basic)
+        
+        # 余额保护
+        h4_basic = QHBoxLayout()
+        self.chk_low_balance = QCheckBox("余额低于此值停止:")
+        h4_basic.addWidget(self.chk_low_balance)
+        
+        self.spin_low_balance = QDoubleSpinBox()
+        self.spin_low_balance.setRange(0, 1000000)
+        self.spin_low_balance.setValue(500.0)
+        h4_basic.addWidget(self.spin_low_balance)
+        layout_basic.addLayout(h4_basic)
+        
+        grp_basic.setLayout(layout_basic)
+        settings_layout.addWidget(grp_basic)
+        
+        # 动态策略
+        grp_strategy = QGroupBox("动态策略 (对冲)")
+        layout_strategy = QVBoxLayout()
+        
+        # 输了递增
+        h3_strat = QHBoxLayout()
+        h3_strat.addWidget(QLabel("输-递增比例(%):"))
+        self.spin_increase_rate = QDoubleSpinBox()
+        self.spin_increase_rate.setRange(0, 100)
+        self.spin_increase_rate.setValue(2.0)
+        h3_strat.addWidget(self.spin_increase_rate)
+        
+        h3_strat.addWidget(QLabel("输-固定增加:"))
+        self.spin_increase_fixed = QDoubleSpinBox()
+        self.spin_increase_fixed.setRange(0, 1000)
+        self.spin_increase_fixed.setValue(20.0)
+        h3_strat.addWidget(self.spin_increase_fixed)
+        layout_strategy.addLayout(h3_strat)
+        
+        # 赢了递减
+        h4_strat = QHBoxLayout()
+        h4_strat.addWidget(QLabel("赢-递减比例(%):"))
+        self.spin_decrease_rate = QDoubleSpinBox()
+        self.spin_decrease_rate.setRange(0, 100)
+        self.spin_decrease_rate.setValue(2.0)
+        h4_strat.addWidget(self.spin_decrease_rate)
+        layout_strategy.addLayout(h4_strat)
+        
+        grp_strategy.setLayout(layout_strategy)
+        settings_layout.addWidget(grp_strategy)
+        
+        # 止盈止损
+        grp_stop = QGroupBox("止盈止损")
+        layout_stop = QVBoxLayout()
+        
+        self.chk_take_profit = QCheckBox("启用止盈")
+        layout_stop.addWidget(self.chk_take_profit)
+        h5_stop = QHBoxLayout()
+        h5_stop.addWidget(QLabel("止盈金额:"))
+        self.spin_take_profit = QDoubleSpinBox()
+        self.spin_take_profit.setRange(0, 1000000)
+        self.spin_take_profit.setValue(2000.0)
+        h5_stop.addWidget(self.spin_take_profit)
+        layout_stop.addLayout(h5_stop)
+        
+        self.chk_stop_loss = QCheckBox("启用止损")
+        layout_stop.addWidget(self.chk_stop_loss)
+        h6_stop = QHBoxLayout()
+        h6_stop.addWidget(QLabel("止损金额:"))
+        self.spin_stop_loss = QDoubleSpinBox()
+        self.spin_stop_loss.setRange(-1000000, 0)
+        self.spin_stop_loss.setValue(-5000.0)
+        h6_stop.addWidget(self.spin_stop_loss)
+        layout_stop.addLayout(h6_stop)
+        
+        grp_stop.setLayout(layout_stop)
+        settings_layout.addWidget(grp_stop)
+        
+        settings_splitter.addWidget(settings_widget)
+        
+        # --- 下半部分: 号码管理 ---
+        import_widget = QWidget()
+        import_layout = QVBoxLayout(import_widget)
+        import_layout.setContentsMargins(0, 0, 0, 0)
+        
+        grp_import = QGroupBox("号码管理")
+        layout_import = QVBoxLayout()
         
         btn_layout = QHBoxLayout()
         btn_import_txt = QPushButton("从TXT导入")
@@ -562,23 +949,79 @@ class Canada28Simulator(QMainWindow):
         
         btn_layout.addStretch()
         
-        import_layout.addLayout(btn_layout)
+        layout_import.addLayout(btn_layout)
+        
+        # === 自定义冷门导出 (新增需求) ===
+        grp_export_cold = QGroupBox("冷门号码自选导出")
+        layout_export_cold = QVBoxLayout()
+        
+        h_cold_1 = QHBoxLayout()
+        h_cold_1.addWidget(QLabel("统计周期(期):"))
+        self.spin_cold_period = QSpinBox()
+        self.spin_cold_period.setRange(10, 1000000) # 设为足够大，支持数据库所有数据
+        self.spin_cold_period.setValue(2000)
+        h_cold_1.addWidget(self.spin_cold_period)
+        
+        # 添加动态提示 (显示总数据量)
+        self.lbl_cold_hint = QLabel("(加载中...)")
+        self.lbl_cold_hint.setStyleSheet("color: gray; font-size: 10px;")
+        h_cold_1.addWidget(self.lbl_cold_hint)
+        # 尝试立即更新一次
+        QTimer.singleShot(500, self.update_history_table)
+        
+        h_cold_1.addWidget(QLabel("冷门判定(出现率< %):"))
+        self.spin_cold_percent = QDoubleSpinBox()
+        self.spin_cold_percent.setRange(0.01, 10.0)
+        self.spin_cold_percent.setSingleStep(0.01)
+        self.spin_cold_percent.setValue(0.10) # 0.1%
+        h_cold_1.addWidget(self.spin_cold_percent)
+        layout_export_cold.addLayout(h_cold_1)
+        
+        h_cold_2 = QHBoxLayout()
+        h_cold_2.addWidget(QLabel("导出数量(个):"))
+        self.spin_cold_quantity = QSpinBox()
+        self.spin_cold_quantity.setRange(1, 1000)
+        self.spin_cold_quantity.setValue(100)
+        h_cold_2.addWidget(self.spin_cold_quantity)
+        
+        # 移除 CheckBox, 统一使用弹窗选择
+        # self.chk_cold_pure = QCheckBox("纯数字(无说明)")
+        # h_cold_2.addWidget(self.chk_cold_pure)
+        
+        btn_export_cold_custom = QPushButton("导出定义冷门号码")
+        btn_export_cold_custom.clicked.connect(self.export_custom_cold_numbers)
+        # 样式美化
+        btn_export_cold_custom.setStyleSheet("background-color: #2196F3; color: white;")
+        h_cold_2.addWidget(btn_export_cold_custom)
+        layout_export_cold.addLayout(h_cold_2)
+        
+        grp_export_cold.setLayout(layout_export_cold)
+        layout_import.addWidget(grp_export_cold)
         
         self.lbl_numbers_count = QLabel("当前已导入号码: 0 个")
-        import_layout.addWidget(self.lbl_numbers_count)
+        layout_import.addWidget(self.lbl_numbers_count)
         
         self.txt_numbers_preview = QTextEdit()
         self.txt_numbers_preview.setReadOnly(False) # 允许编辑
         self.txt_numbers_preview.setPlaceholderText("在此处输入号码，支持逗号、空格或换行分隔。\n例如: 001, 002, 003")
-        import_layout.addWidget(self.txt_numbers_preview)
+        layout_import.addWidget(self.txt_numbers_preview)
         
         btn_update_numbers = QPushButton("更新/保存号码列表")
         btn_update_numbers.clicked.connect(self.parse_numbers_from_text)
-        import_layout.addWidget(btn_update_numbers)
+        layout_import.addWidget(btn_update_numbers)
         
-        tabs.addTab(tab_import, "号码管理")
+        grp_import.setLayout(layout_import)
+        import_layout.addWidget(grp_import)
         
-        # Tab 3: 历史回测
+        settings_splitter.addWidget(import_widget)
+        
+        # 设置初始比例
+        settings_splitter.setSizes([400, 300])
+        
+        combined_layout.addWidget(settings_splitter)
+        self.tabs.addTab(tab_combined, "设置与号码")
+        
+        # Tab 3: 历史回测 (保持不变)
         tab_backtest = QWidget()
         backtest_layout = QVBoxLayout(tab_backtest)
         
@@ -613,123 +1056,10 @@ class Canada28Simulator(QMainWindow):
         self.txt_backtest_result.setReadOnly(True)
         backtest_layout.addWidget(self.txt_backtest_result)
         
-        tabs.addTab(tab_backtest, "历史回测")
+        self.tabs.addTab(tab_backtest, "历史回测")
         
-        # Tab 4: 参数设置
-        tab_settings = QWidget()
-        settings_layout = QVBoxLayout(tab_settings)
         
-        # 基础设置
-        grp_basic = QGroupBox("基础设置")
-        layout_basic = QVBoxLayout()
-        
-        # 赔率
-        h1 = QHBoxLayout()
-        h1.addWidget(QLabel("中奖赔率:"))
-        self.spin_payout = QDoubleSpinBox()
-        self.spin_payout.setRange(0, 10000)
-        self.spin_payout.setValue(995.0)
-        h1.addWidget(self.spin_payout)
-        layout_basic.addLayout(h1)
-        
-        # 单注金额
-        h2 = QHBoxLayout()
-        h2.addWidget(QLabel("初始单注:"))
-        self.spin_unit_bet = QDoubleSpinBox()
-        self.spin_unit_bet.setRange(0.1, 10000)
-        self.spin_unit_bet.setSingleStep(0.1)
-        self.spin_unit_bet.setValue(0.1)
-        h2.addWidget(self.spin_unit_bet)
-        layout_basic.addLayout(h2)
-        
-        # 最高单注限制
-        h3 = QHBoxLayout()
-        self.chk_max_unit_bet = QCheckBox("启用最高单注限制:")
-        self.chk_max_unit_bet.setChecked(True)
-        h3.addWidget(self.chk_max_unit_bet)
-        
-        self.spin_max_unit_bet = QDoubleSpinBox()
-        self.spin_max_unit_bet.setRange(0.1, 100000)
-        self.spin_max_unit_bet.setSingleStep(0.1)  # 支持0.1步进
-        self.spin_max_unit_bet.setValue(10.0)
-        h3.addWidget(self.spin_max_unit_bet)
-        layout_basic.addLayout(h3)
-        
-        # 余额保护
-        h4 = QHBoxLayout()
-        self.chk_low_balance = QCheckBox("余额低于此值停止:")
-        h4.addWidget(self.chk_low_balance)
-        
-        self.spin_low_balance = QDoubleSpinBox()
-        self.spin_low_balance.setRange(0, 1000000)
-        self.spin_low_balance.setValue(500.0)
-        h4.addWidget(self.spin_low_balance)
-        layout_basic.addLayout(h4)
-        
-        grp_basic.setLayout(layout_basic)
-        settings_layout.addWidget(grp_basic)
-        
-        # 动态策略
-        grp_strategy = QGroupBox("动态策略 (对冲)")
-        layout_strategy = QVBoxLayout()
-        
-        # 输了递增
-        h3 = QHBoxLayout()
-        h3.addWidget(QLabel("输-递增比例(%):"))
-        self.spin_increase_rate = QDoubleSpinBox()
-        self.spin_increase_rate.setRange(0, 100)
-        self.spin_increase_rate.setValue(2.0)
-        h3.addWidget(self.spin_increase_rate)
-        
-        h3.addWidget(QLabel("输-固定增加:"))
-        self.spin_increase_fixed = QDoubleSpinBox()
-        self.spin_increase_fixed.setRange(0, 1000)
-        self.spin_increase_fixed.setValue(20.0)
-        h3.addWidget(self.spin_increase_fixed)
-        layout_strategy.addLayout(h3)
-        
-        # 赢了递减
-        h4 = QHBoxLayout()
-        h4.addWidget(QLabel("赢-递减比例(%):"))
-        self.spin_decrease_rate = QDoubleSpinBox()
-        self.spin_decrease_rate.setRange(0, 100)
-        self.spin_decrease_rate.setValue(2.0)
-        h4.addWidget(self.spin_decrease_rate)
-        layout_strategy.addLayout(h4)
-        
-        grp_strategy.setLayout(layout_strategy)
-        settings_layout.addWidget(grp_strategy)
-        
-        # 止盈止损
-        grp_stop = QGroupBox("止盈止损")
-        layout_stop = QVBoxLayout()
-        
-        self.chk_take_profit = QCheckBox("启用止盈")
-        layout_stop.addWidget(self.chk_take_profit)
-        h5 = QHBoxLayout()
-        h5.addWidget(QLabel("止盈金额:"))
-        self.spin_take_profit = QDoubleSpinBox()
-        self.spin_take_profit.setRange(0, 1000000)
-        self.spin_take_profit.setValue(2000.0)
-        h5.addWidget(self.spin_take_profit)
-        layout_stop.addLayout(h5)
-        
-        self.chk_stop_loss = QCheckBox("启用止损")
-        layout_stop.addWidget(self.chk_stop_loss)
-        h6 = QHBoxLayout()
-        h6.addWidget(QLabel("止损金额:"))
-        self.spin_stop_loss = QDoubleSpinBox()
-        self.spin_stop_loss.setRange(-1000000, 0)
-        self.spin_stop_loss.setValue(-5000.0)
-        h6.addWidget(self.spin_stop_loss)
-        layout_stop.addLayout(h6)
-        
-        grp_stop.setLayout(layout_stop)
-        settings_layout.addWidget(grp_stop)
-        
-        settings_layout.addStretch()
-        tabs.addTab(tab_settings, "参数设置")
-        
+        # Tab 5: 盈亏图表
         # Tab 5: 盈亏图表
         tab_chart = QWidget()
         chart_layout = QVBoxLayout(tab_chart)
@@ -743,16 +1073,252 @@ class Canada28Simulator(QMainWindow):
         self.ax.grid(True)
         
         chart_layout.addWidget(self.canvas)
-        tabs.addTab(tab_chart, "盈亏图表")
+        self.tabs.addTab(tab_chart, "盈亏图表")
         
-        self.simulator_layout.addWidget(tabs)
+        # Tab 6: 号码统计
+        tab_stats = QWidget()
+        stats_layout = QVBoxLayout(tab_stats)
+        
+        # 筛选条件区
+        filter_group = QGroupBox("筛选条件")
+        filter_layout = QVBoxLayout()
+        filter_layout.setContentsMargins(5, 5, 5, 5) # 减少边距
+        filter_layout.setSpacing(5) # 减少间距
+        
+        # 第一行：筛选条件 + 搜索功能
+        h1 = QHBoxLayout()
+        h1.setContentsMargins(0, 0, 0, 0)
+        h1.setSpacing(15) 
+        
+        # --- 左侧：筛选条件 ---
+        
+        # 期数筛选
+        h1.addWidget(QLabel("<b>期数:</b>"))
+        self.combo_period_presets = QComboBox()
+        self.combo_period_presets.addItems(["自定义", "近100期", "近500期", "近1000期", "全部"])
+        self.combo_period_presets.setCurrentText("近500期")
+        h1.addWidget(self.combo_period_presets)
+        
+        self.spin_custom_period = QSpinBox()
+        self.spin_custom_period.setRange(10, 100000)
+        self.spin_custom_period.setValue(500)
+        h1.addWidget(self.spin_custom_period)
+        
+        # 日期筛选
+        h1.addWidget(QLabel("<b>日期:</b>"))
+        self.combo_days_presets = QComboBox()
+        self.combo_days_presets.addItems(["不限", "自定义", "近7天", "近30天", "近90天"])
+        self.combo_days_presets.setCurrentText("不限")
+        h1.addWidget(self.combo_days_presets)
+        
+        self.spin_custom_days = QSpinBox()
+        self.spin_custom_days.setRange(1, 3650)
+        self.spin_custom_days.setValue(30)
+        # 默认禁用日期输入框（因为默认是不限）
+        self.spin_custom_days.setEnabled(False) 
+        h1.addWidget(self.spin_custom_days)
+        
+        # 关联逻辑
+        self.combo_period_presets.currentTextChanged.connect(self.on_period_preset_changed)
+        self.combo_days_presets.currentTextChanged.connect(self.on_days_preset_changed)
+        
+        h1.addStretch()
+        
+        # --- 右侧：号码查询 ---
+        search_group = QGroupBox()
+        search_layout = QHBoxLayout(search_group)
+        search_layout.setContentsMargins(5, 2, 5, 2)
+        search_layout.setSpacing(5)
+        
+        search_layout.addWidget(QLabel("🔍 查号:"))
+        self.txt_search_number = QLineEdit()
+        self.txt_search_number.setPlaceholderText("号码")
+        self.txt_search_number.setFixedWidth(60)
+        search_layout.addWidget(self.txt_search_number)
+        
+        btn_search = QPushButton("查询")
+        btn_search.clicked.connect(self.search_number_stats)
+        search_layout.addWidget(btn_search)
+        
+        self.lbl_search_result = QLabel("")
+        self.lbl_search_result.setStyleSheet("color: blue; font-weight: bold;")
+        search_layout.addWidget(self.lbl_search_result)
+        
+        h1.addWidget(search_group)
+        
+        filter_layout.addLayout(h1)
+        
+        # 第二行：显示数量 + 数据量提示 + 刷新按钮
+        h2 = QHBoxLayout()
+        h2.setContentsMargins(0, 0, 0, 0)
+        
+        h2.addWidget(QLabel("<b>显示数量:</b>"))
+        self.combo_display_presets = QComboBox()
+        self.combo_display_presets.addItems(["自定义", "前10位", "前20位", "前50位", "前100位", "全部"])
+        self.combo_display_presets.setCurrentText("前20位")
+        h2.addWidget(self.combo_display_presets)
+        
+        self.spin_display_count = QSpinBox()
+        self.spin_display_count.setRange(1, 1000)
+        self.spin_display_count.setValue(20)
+        h2.addWidget(self.spin_display_count)
+        
+        # 关联逻辑
+        self.combo_display_presets.currentTextChanged.connect(self.on_display_preset_changed)
+        
+        h2.addSpacing(20)
+        self.lbl_data_range_hint = QLabel("(数据库共保存 ? 天数据)")
+        self.lbl_data_range_hint.setStyleSheet("color: gray; font-size: 11px;")
+        h2.addWidget(self.lbl_data_range_hint)
+        
+        h2.addStretch()
+        
+        btn_refresh_stats = QPushButton("查询统计")
+        btn_refresh_stats.setCursor(Qt.PointingHandCursor)
+        btn_refresh_stats.setMinimumHeight(32)
+        btn_refresh_stats.setStyleSheet("""
+            QPushButton {
+                font-weight: bold; 
+                font-size: 12px;
+                padding: 5px 20px; 
+                background-color: #2196F3; 
+                color: white; 
+                border-radius: 4px;
+                border: 1px solid #1976D2;
+            }
+            QPushButton:hover {
+                background-color: #42A5F5;
+            }
+            QPushButton:pressed {
+                background-color: #1976D2;
+            }
+        """)
+        btn_refresh_stats.clicked.connect(self.update_number_stats_display)
+        h2.addWidget(btn_refresh_stats)
+        
+        # Main Splitter: 上下分隔
+        stats_main_splitter = QSplitter(Qt.Vertical)
+        
+        # --- 上半部分：筛选区 ---
+        # (filter_group 已经创建好了)
+        filter_layout.addLayout(h2)
+        filter_group.setLayout(filter_layout)
+        
+        # 添加到 Splitter 上部分
+        stats_main_splitter.addWidget(filter_group)
+        
+        # --- 下半部分：结果区（表格 + 图表） ---
+        stats_bottom_widget = QWidget()
+        stats_bottom_layout = QVBoxLayout(stats_bottom_widget)
+        stats_bottom_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 统计结果区（左右分栏）
+        results_splitter = QSplitter(Qt.Horizontal)
+        
+        # 左侧：热门号码
+        hot_widget = QWidget()
+        hot_layout = QVBoxLayout(hot_widget)
+        hot_layout.setContentsMargins(0, 0, 4, 0) # 右边加点间距
+        
+        h_hot = QHBoxLayout()
+        self.lbl_hot_count = QLabel("热门号码 (共显示 0/0)")
+        self.lbl_hot_count.setStyleSheet("font-weight: bold; color: red;")
+        h_hot.addWidget(self.lbl_hot_count)
+        h_hot.addStretch()
+        
+        self.btn_export_hot = QPushButton("导出")
+        self.btn_export_hot.setToolTip("导出当前表格内容到Excel或TXT")
+        self.btn_export_hot.clicked.connect(lambda: self.export_stats_table("hot"))
+        h_hot.addWidget(self.btn_export_hot)
+        hot_layout.addLayout(h_hot)
+        
+        self.table_hot = QTableWidget()
+        self.table_hot.setColumnCount(5)
+        self.table_hot.setHorizontalHeaderLabels(["排名", "号码", "次数", "最后出现期号", "最后日期"])
+        self.table_hot.horizontalHeader().setStretchLastSection(True)
+        hot_layout.addWidget(self.table_hot)
+        
+        results_splitter.addWidget(hot_widget)
+        
+        # 右侧：冷门号码
+        cold_widget = QWidget()
+        cold_layout = QVBoxLayout(cold_widget)
+        cold_layout.setContentsMargins(4, 0, 0, 0) # 左边加点间距
+        
+        h_cold = QHBoxLayout()
+        self.lbl_cold_count = QLabel("冷门号码 (共显示 0/0)")
+        self.lbl_cold_count.setStyleSheet("font-weight: bold; color: blue;")
+        h_cold.addWidget(self.lbl_cold_count)
+        h_cold.addStretch()
+        
+        self.btn_export_cold = QPushButton("导出")
+        self.btn_export_cold.setToolTip("导出当前表格内容到Excel或TXT")
+        self.btn_export_cold.clicked.connect(lambda: self.export_stats_table("cold"))
+        h_cold.addWidget(self.btn_export_cold)
+        cold_layout.addLayout(h_cold)
+        
+        self.table_cold = QTableWidget()
+        self.table_cold.setColumnCount(5)
+        self.table_cold.setHorizontalHeaderLabels(["排名", "号码", "次数", "最后期号", "最后日期"])
+        self.table_cold.horizontalHeader().setStretchLastSection(True)
+        cold_layout.addWidget(self.table_cold)
+        
+        results_splitter.addWidget(cold_widget)
+        
+        stats_bottom_layout.addWidget(results_splitter)
+        
+        # 底部图表
+        self.stats_figure = Figure(figsize=(8, 3), dpi=100)
+        # 调整图表边距，防止X轴标签被遮挡 (Wait until resize or use safe margin)
+        self.stats_figure.subplots_adjust(bottom=0.25, top=0.9, left=0.08, right=0.95)
+        
+        self.stats_canvas = FigureCanvas(self.stats_figure)
+        self.stats_canvas.setMinimumSize(400, 200) # 防止压缩过小导致的错误
+        self.stats_ax = self.stats_figure.add_subplot(111)
+        self.stats_ax.set_title("号码出现频率分布")
+        self.stats_ax.set_xlabel("号码排名")
+        self.stats_ax.set_ylabel("出现次数")
+        self.stats_ax.grid(True, alpha=0.3)
+        
+        stats_bottom_layout.addWidget(self.stats_canvas)
+        
+        # 添加下半部分到 Splitter
+        stats_main_splitter.addWidget(stats_bottom_widget)
+        
+        # 设置 Splitter 初始比例 (筛选区固定高度，剩下给结果区)
+        stats_main_splitter.setStretchFactor(0, 0)
+        stats_main_splitter.setStretchFactor(1, 1)
+
+        stats_layout.addWidget(stats_main_splitter)
+        
+        self.tabs.addTab(tab_stats, "号码统计")
+        
+        self.simulator_layout.addWidget(self.tabs)
         
         # 极值统计面板 (插入到Tab下方)
         self.create_stats_panel()
 
+    def on_tab_changed(self, index):
+        """Tab切换回调"""
+        tab_text = self.tabs.tabText(index)
+        
+        # 如果是"设置与号码"或"号码统计"Tab，隐藏底部的极值统计和历史记录
+        if tab_text == "设置与号码" or tab_text == "号码统计":
+            if hasattr(self, 'stats_panel_group'):
+                self.stats_panel_group.hide()
+            if hasattr(self, 'history_panel_group'):
+                self.history_panel_group.hide()
+        else:
+            # 其他Tab显示
+            if hasattr(self, 'stats_panel_group'):
+                self.stats_panel_group.show()
+            if hasattr(self, 'history_panel_group'):
+                self.history_panel_group.show()
+
+    # === 浏览器相关功能 ===
     def create_stats_panel(self):
         """创建极值统计面板"""
-        group = QGroupBox("极值统计")
+        self.stats_panel_group = QGroupBox("极值统计")
         layout = QHBoxLayout()
         
         # 最高投注
@@ -787,12 +1353,13 @@ class Canada28Simulator(QMainWindow):
         layout.addWidget(self.lbl_debt)
         
         layout.addStretch()
+        group = self.stats_panel_group
         group.setLayout(layout)
         self.simulator_layout.addWidget(group)
         
     def create_history_table(self):
         """创建历史记录表格"""
-        group = QGroupBox("历史记录")
+        self.history_panel_group = QGroupBox("历史记录")
         layout = QVBoxLayout()
         
         # 添加说明标签
@@ -815,6 +1382,7 @@ class Canada28Simulator(QMainWindow):
         self.table.cellClicked.connect(self.on_table_cell_clicked) # 连接点击事件
         
         layout.addWidget(self.table)
+        group = self.history_panel_group
         group.setLayout(layout)
         self.simulator_layout.addWidget(group)
         
@@ -893,43 +1461,64 @@ class Canada28Simulator(QMainWindow):
 
 
     def validate_token(self):
-        """验证Token有效性"""
+        """验证Token有效性（异步版本，避免启动时阻塞UI）"""
         self.data_manager.set_auth(self.token, self.cookie)
         
-        # 按照用户要求：尝试请求一次历史记录来验证
-        print("🔍 正在通过请求历史数据验证Token...")
-        # 注意：这里需要在非UI线程请求，或者简单的阻塞请求（启动时可以接受）
-        # 为了简单，这里直接调用同步方法，因为是在启动时
-        remote_latest = self.data_manager.get_remote_latest()
+        # 启动异步验证Worker
+        print("🔍 开始异步验证Token...")
+        self.token_validate_worker = TokenValidateWorker(self.data_manager)
+        self.token_validate_worker.success_signal.connect(self.on_token_validate_success)
+        self.token_validate_worker.failed_signal.connect(self.on_token_validate_failed)
+        self.token_validate_worker.start()
+    
+    def on_token_validate_success(self, remote_latest):
+        """Token验证成功回调"""
+        print("✅ Token验证成功")
+        self.lbl_login_status.setText("已登录 (缓存)")
+        self.lbl_login_status.setStyleSheet("color: green; font-weight: bold;")
         
-        if remote_latest:
-            print("✅ Token验证成功 (历史数据请求成功)")
-            self.lbl_login_status.setText("已登录 (缓存)")
-            self.lbl_login_status.setStyleSheet("color: green; font-weight: bold;")
-            
-            # 自动收起浏览器 (因为已经登录了)
-            if self.browser_panel.isVisible():
-                self.toggle_browser()
-                
-                # 注入到浏览器 (回显) - 已移除
-                # self.inject_token_to_browser()
-            
-            # 同步数据
-            self.refresh_data()
-            # 刷新表格 (显示同步后的最新数据)
+        # 自动收起浏览器
+        if self.browser_panel.isVisible():
+            self.toggle_browser()
+        
+        # 同步数据和刷新表格
+        self.refresh_data()
+        self.update_history_table()
+        
+        # 自动同步真实账户盈亏
+        self.fetch_real_account_history()
+    
+    def on_token_validate_failed(self):
+        """Token验证失败回调"""
+        print("⚠️ Token已过期或无效")
+        self.lbl_login_status.setText("Token过期")
+        self.lbl_login_status.setStyleSheet("color: red; font-weight: bold;")
+        
+        # 确保浏览器显示以便用户重新登录
+        if not self.browser_panel.isVisible():
+            self.toggle_browser()
+
+    def start_background_sync(self):
+        """启动后台数据同步（避免UI阻塞）"""
+        # 防止重复启动
+        if hasattr(self, 'sync_worker') and self.sync_worker.isRunning():
+            print("⚠️ 数据同步正在进行中...")
+            return
+        
+        print("🔄 开始后台同步历史数据...")
+        self.sync_worker = DataSyncWorker(self.data_manager)
+        self.sync_worker.progress_signal.connect(lambda msg: print(msg))
+        self.sync_worker.finished_signal.connect(self.on_sync_finished)
+        self.sync_worker.start()
+    
+    def on_sync_finished(self, success):
+        """数据同步完成回调"""
+        if success:
+            print("✅ 历史数据同步完成")
+            # 刷新表格显示
             self.update_history_table()
-            # 自动同步真实账户盈亏
-            self.fetch_real_account_history()
         else:
-            print("⚠️ Token已过期或无效 (历史数据请求失败)")
-            self.lbl_login_status.setText("Token过期")
-            self.lbl_login_status.setStyleSheet("color: red; font-weight: bold;")
-            # 确保浏览器显示以便用户重新登录
-            if not self.browser_panel.isVisible():
-                self.toggle_browser()
-
-
-        
+            print("⚠️ 历史数据同步失败（可能网络问题）")
     def toggle_browser(self):
         """切换浏览器显示/隐藏"""
         if self.browser_panel.isVisible():
@@ -1050,11 +1639,21 @@ class Canada28Simulator(QMainWindow):
             
         if filepath:
             try:
+                # 读取文件内容
+                # 逐行读取以支持过滤注释行
+                valid_lines = []
                 with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                    
+                    for line in f:
+                        line = line.strip()
+                        # 跳过注释行和空行
+                        if not line or line.startswith('#'):
+                            continue
+                        valid_lines.append(line)
+                        
+                content = " ".join(valid_lines)
+                     
                 # 替换常见分隔符为逗号
-                content = content.replace('\n', ',').replace(' ', ',').replace('，', ',')
+                content = content.replace('\n', ',').replace(' ', ',').replace('，', ',').replace('\t', ',')
                 parts = content.split(',')
                 
                 numbers = []
@@ -1153,9 +1752,24 @@ class Canada28Simulator(QMainWindow):
         if not ok:
             return
             
+        # 新增：询问导出格式 (统一体验)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("导出格式")
+        msg_box.setText("请选择您希望导出的格式:")
+        btn_full = msg_box.addButton("完整表格(含统计)", QMessageBox.ActionRole)
+        btn_pure = msg_box.addButton("仅号码(纯数字)", QMessageBox.ActionRole)
+        btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+        msg_box.exec_()
+        
+        if msg_box.clickedButton() == btn_cancel:
+            return
+        
+        is_pure = (msg_box.clickedButton() == btn_pure)
+            
         # 2. 选择保存路径
+        default_name = f"top_{count}_combinations.txt"
         filepath, _ = QFileDialog.getSaveFileName(self, "保存热门组合", 
-                                                f"top_{count}_combinations.txt", 
+                                                default_name, 
                                                 "Text Files (*.txt)")
         if not filepath:
             return
@@ -1164,8 +1778,11 @@ class Canada28Simulator(QMainWindow):
         try:
             # 动态导入以避免循环依赖或启动加载
             import generate_top_combinations
+            # 重新加载模块以确保获取最新代码 (如果修改了py文件)
+            import importlib
+            importlib.reload(generate_top_combinations)
             
-            success, msg = generate_top_combinations.export_top_combinations(filepath, count)
+            success, msg = generate_top_combinations.export_top_combinations(filepath, count, is_pure)
             
             if success:
                 QMessageBox.information(self, "成功", msg)
@@ -1180,8 +1797,217 @@ class Canada28Simulator(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "错误", f"执行失败: {e}")
 
+    def export_stats_table(self, type_str):
+        """导出统计表格数据"""
+        try:
+            if type_str == "hot":
+                table = self.table_hot
+                default_name = f"hot_numbers_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                title = "热门号码统计"
+            else:
+                table = self.table_cold
+                default_name = f"cold_numbers_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                title = "冷门号码统计"
+            
+            # 选择文件
+            # 询问导出格式
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("导出格式")
+            msg_box.setText("请选择您希望导出的格式:")
+            btn_full = msg_box.addButton("完整表格(含统计)", QMessageBox.ActionRole)
+            btn_pure = msg_box.addButton("仅号码(纯数字)", QMessageBox.ActionRole)
+            btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+            msg_box.exec_()
+            
+            if msg_box.clickedButton() == btn_cancel:
+                return
+                
+            is_pure = (msg_box.clickedButton() == btn_pure)
+            
+            # 根据选择确定后缀和过滤器
+            ext = ".txt" if is_pure else ".csv"
+            filter_str = "Text Files (*.txt)" if is_pure else "CSV Files (*.csv)"
+            
+            if not default_name.endswith(ext):
+                default_name += ext
+                
+            filepath, _ = QFileDialog.getSaveFileName(self, f"导出{title}", default_name, filter_str)
+            if not filepath:
+                return
+                
+            rows = table.rowCount()
+            cols = table.columnCount()
+            
+            with open(filepath, 'w', encoding='utf-8-sig' if filepath.endswith('.csv') else 'utf-8') as f:
+                if is_pure:
+                    # 纯数字模式：提取第一列 (假设第一列是号码)
+                    nums = []
+                    for r in range(rows):
+                        item = table.item(r, 0)
+                        if item:
+                            txt = item.text()
+                            if txt: nums.append(txt)
+                    f.write(", ".join(nums))
+                else:
+                    # 完整表格模式
+                    # 写入表头
+                    headers = [table.horizontalHeaderItem(c).text() for c in range(cols)]
+                    if filepath.endswith('.csv'):
+                        f.write(",".join(headers) + "\n")
+                    else:
+                        f.write("\t".join(headers) + "\n")
+                        f.write("-" * 50 + "\n")
+                    
+                    # 写入数据
+                    sep = "," if filepath.endswith(".csv") else "\t"
+                    for r in range(rows):
+                        row_data = []
+                        for c in range(cols):
+                            item = table.item(r, c)
+                            text = item.text() if item else ""
+                            # 处理 CSV 可能需要的转义
+                            if "," in text and sep == ",":
+                                text = f'"{text}"'
+                            row_data.append(text)
+                        f.write(sep.join(row_data) + "\n")
+                        # 处理CSV中的逗号
+                        if filepath.endswith('.csv') and "," in text:
+                            text = f'"{text}"'
+                        row_data.append(text)
+                        
+                    if filepath.endswith('.csv'):
+                        f.write(",".join(row_data) + "\n")
+                    else:
+                        f.write("\t".join(row_data) + "\n")
+                        
+            QMessageBox.information(self, "成功", f"导出成功!\n路径: {filepath}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"发生错误: {e}")
+
+    def export_custom_cold_numbers(self):
+        """根据定义导出冷门号码"""
+        try:
+            # 1. 获取参数
+            period_limit = self.spin_cold_period.value()
+            threshold_percent = self.spin_cold_percent.value()
+            export_count = self.spin_cold_quantity.value()
+            
+            # 2. 获取数据
+            data_list = self.data_manager.read_all_local_data()
+            if not data_list:
+                QMessageBox.warning(self, "警告", "暂无历史数据")
+                return
+                
+            # 截取最近N期
+            if len(data_list) > period_limit:
+                target_data = data_list[:period_limit] # data_list[0]是最新
+            else:
+                target_data = data_list
+                
+            actual_periods = len(target_data)
+            
+            # 3. 统计频率
+            counts = {}
+            for d in target_data:
+                nums = d.get('number_overt', '').split(',')
+                # 处理可能的不规范格式 (比如连在一起的)
+                if len(nums) == 1 and len(nums[0]) > 3:
+                     # 尝试每3位分割? 暂时假设格式规范 "123,456"
+                     pass
+                
+                for n in nums:
+                    n = n.strip()
+                    if not n: continue
+                    counts[n] = counts.get(n, 0) + 1
+                    
+            # 补全0-999所有号码
+            all_numbers = []
+            for i in range(1000):
+                num_str = f"{i:03d}"
+                freq = counts.get(num_str, 0)
+                freq_rate = (freq / actual_periods) * 100
+                all_numbers.append({
+                    "num": num_str,
+                    "count": freq,
+                    "rate": freq_rate
+                })
+                
+            # 4. 筛选 (按照频率升序排列: 越冷越前)
+            all_numbers.sort(key=lambda x: x["count"])
+            
+            # 过滤：仅保留出现率低于阈值的
+            filtered_numbers = [x for x in all_numbers if x["rate"] < threshold_percent]
+            
+            # 如果筛选结果不足，可选提示或全部输出
+            if not filtered_numbers:
+                reply = QMessageBox.question(self, "提示", 
+                    f"在最近 {actual_periods} 期中，没有号码出现率低于 {threshold_percent}%。\n是否直接导出最冷的 {export_count} 个?",
+                    QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    filtered_numbers = all_numbers # 用全部
+                else:
+                    return
+
+            # 5. 截取数量
+            final_list = filtered_numbers[:min(export_count, len(filtered_numbers))]
+            
+            # 6. 导出 (统一询问)
+            msg_box = QMessageBox(self)
+            msg_box.setWindowTitle("导出格式")
+            msg_box.setText("请选择您希望导出的格式:")
+            btn_full = msg_box.addButton("完整表格(含统计)", QMessageBox.ActionRole)
+            btn_pure = msg_box.addButton("仅号码(纯数字)", QMessageBox.ActionRole)
+            btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+            msg_box.exec_()
+            
+            if msg_box.clickedButton() == btn_cancel:
+                return
+            
+            is_pure = (msg_box.clickedButton() == btn_pure)
+            
+            default_name = f"custom_cold_p{period_limit}_r{threshold_percent}_{datetime.now().strftime('%H%M%S')}.txt"
+            filepath, _ = QFileDialog.getSaveFileName(self, "导出自定义冷门", default_name, "Text Files (*.txt)")
+            
+            if not filepath:
+                return
+                
+            with open(filepath, 'w', encoding='utf-8') as f:
+                # 写入号码 (逗号分隔)
+                nums_only = [x['num'] for x in final_list]
+                
+                # 检查是否为纯数字模式
+                if is_pure:
+                    f.write(", ".join(nums_only))
+                else:
+                    # 写入头部信息
+                    f.write(f"# 自定义冷门导出\n")
+                    f.write(f"# 统计周期: 近 {actual_periods} 期\n")
+                    f.write(f"# 筛选条件: 出现率 < {threshold_percent}%\n")
+                    f.write(f"# 导出数量: {len(final_list)} 个\n")
+                    f.write("-" * 30 + "\n")
+                    
+                    f.write(", ".join(nums_only))
+                    f.write("\n\n")
+                    f.write("-" * 30 + "\n")
+                    
+                    # 写入详细分析
+                    f.write("号码\t\t出现次数\t出现率(%)\n")
+                    for item in final_list:
+                        f.write(f"{item['num']}\t\t{item['count']}\t\t{item['rate']:.2f}%\n")
+                    
+            QMessageBox.information(self, "成功", f"成功导出 {len(final_list)} 个冷门号码！")
+            
+            # 询问导入
+            reply = QMessageBox.question(self, "导入", "是否立即将这些冷门号码导入到模拟器？", QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.import_from_txt(filepath)
+                
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"导出失败: {e}")
+
     def place_real_bet(self, period, unit_bet):
-        """执行真实投注"""
+        """执行真实投注（异步版本，避免下注时阻塞UI）"""
         if not self.my_numbers:
             return
             
@@ -1189,13 +2015,6 @@ class Canada28Simulator(QMainWindow):
         if self.last_bet_period == period:
             return
         self.last_bet_period = period
-            
-        # 构造 o_datas
-        # 格式: 16:号码:金额,16:号码:金额
-        o_datas_list = []
-        for num in self.my_numbers:
-            o_datas_list.append(f"16:{num}:{unit_bet}")
-        o_datas = ",".join(o_datas_list)
         
         total_money = len(self.my_numbers) * unit_bet
         
@@ -1233,190 +2052,84 @@ class Canada28Simulator(QMainWindow):
                     self.update_start_button_text()
                 return
 
-        # 发送请求
-        try:
-            url = "http://s1.pk999p.xyz/index.php/Orders/COrders"
-            data = {
-                "type": "import",
-                "game_id": "2",
-                "period_no": period,
-                "t_datas": "16",
-                "o_datas": o_datas,
-                "position": "txt导入"
-            }
-            
-            # 使用 data_manager 的 session 发送请求 (带 cookie/token)
-            # 这里我们直接用 requests，因为 data_manager 主要负责数据获取
-            # 但我们需要 headers
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-                "X-Requested-With": "XMLHttpRequest",
-                "token": self.token,
-                "Cookie": self.cookie
-            }
-            
-            self.log_run(f"🚀 发送下单请求: 期号={period}, 总额={total_money}")
-            response = requests.post(url, data=data, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                res_json = response.json()
-                code = res_json.get("code")
-                
-                if code == 0:
-                    self.log_run(f"✅ 下单成功: {res_json.get('msg')}")
-                    self.statusBar().showMessage(f"✅ 第{period}期下单成功! 总额: {total_money}", 5000)
-                elif code == 9:
-                    # 余额不足
-                    self.log_run(f"❌ 信用余额不足，停止自动投注！")
-                    QMessageBox.critical(self, "余额不足", "信用余额不足，自动投注已停止！")
-                    self.toggle_simulation() # 停止
-                else:
-                    self.log_run(f"❌ 下单失败: {res_json.get('msg')}")
-                    QMessageBox.warning(self, "下单失败", f"API返回错误: {res_json.get('msg')}")
-            else:
-                self.log_run(f"❌ 下单请求失败: HTTP {response.status_code}")
-                QMessageBox.warning(self, "网络错误", f"HTTP {response.status_code}")
-                
-        except Exception as e:
-            self.log_run(f"❌ 下单异常: {e}")
-            QMessageBox.critical(self, "下单异常", str(e))
-
-            print(f"❌ 下单异常: {e}")
-            QMessageBox.critical(self, "下单异常", str(e))
+        # 使用异步Worker发送请求（避免阻塞UI）
+        self.log_run(f"🚀 准备下单: 期号={period}, 总额={total_money}")
+        
+        self.betting_worker = BettingWorker(self.token, self.cookie, period, self.my_numbers, unit_bet)
+        self.betting_worker.success_signal.connect(self.on_betting_success)
+        self.betting_worker.error_signal.connect(self.on_betting_error)
+        self.betting_worker.balance_low_signal.connect(self.on_betting_balance_low)
+        self.betting_worker.start()
+    
+    def on_betting_success(self, period, msg):
+        """下注成功回调"""
+        total_money = len(self.my_numbers) * self.spin_unit_bet.value()
+        self.log_run(f"✅ 下单成功: {msg}")
+        self.statusBar().showMessage(f"✅ 第{period}期下单成功! 总额: {total_money}", 5000)
+    
+    def on_betting_error(self, error_msg):
+        """下注错误回调"""
+        self.log_run(f"❌ 下单失败: {error_msg}")
+        QMessageBox.warning(self, "下单失败", error_msg)
+    
+    def on_betting_balance_low(self):
+        """余额不足回调"""
+        self.log_run(f"❌ 信用余额不足，停止自动投注！")
+        QMessageBox.critical(self, "余额不足", "信用余额不足，自动投注已停止！")
+        if self.is_running:
+            self.toggle_simulation()  # 停止
 
     def fetch_real_account_history(self):
-        """同步真实账户历史盈亏"""
+        """同步真实账户历史盈亏（异步版本）"""
+        # 防止重复启动
+        if hasattr(self, 'account_sync_worker') and self.account_sync_worker.isRunning():
+            self.log_run("⚠️ 账单同步正在进行中...")
+            return
+        
         self.log_run("🔄 开始同步真实账户历史账单...")
         self.btn_sync_profit.setEnabled(False)
         self.btn_sync_profit.setText("同步中...")
         
-        # 使用 QThread 或简单的 processEvents 避免界面卡死
-        # 这里简单起见，使用 processEvents
-        from PyQt5.QtWidgets import QApplication
+        # 启动异步线程
+        self.account_sync_worker = AccountSyncWorker(self.token, self.cookie)
+        self.account_sync_worker.progress_signal.connect(self.log_run)
+        self.account_sync_worker.finished_signal.connect(self.on_account_sync_finished)
+        self.account_sync_worker.error_signal.connect(self.on_account_sync_error)
+        self.account_sync_worker.start()
+    
+    def on_account_sync_finished(self, total_profit, real_bet_results):
+        """账单同步完成回调"""
+        # 更新数据
+        self.real_bet_results = real_bet_results
         
-        total_profit = 0.0
-        page = 1
-        limit = 50 # 尝试每页多取一点
+        self.log_run(f"✅ 同步完成! 历史总盈亏: {total_profit:.2f}")
+        self.lbl_real_profit.setText(f"真实账户盈亏: {total_profit:.2f}")
+        self.lbl_real_profit_header.setText(f"{total_profit:.2f}")
         
-        try:
-            while True:
-                url = f"http://s1.pk999p.xyz/index.php/Reports/LPeriod?game_id=2&page={page}&limit={limit}"
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "token": self.token,
-                    "Cookie": self.cookie
-                }
-                
-                self.log_run(f"📡 请求第 {page} 页数据...")
-                QApplication.processEvents() # 刷新界面
-                
-                response = requests.get(url, headers=headers, timeout=10)
-                if response.status_code != 200:
-                    self.log_run(f"❌ 请求失败: HTTP {response.status_code}")
-                    break
-                    
-                res_json = response.json()
-                if res_json.get("code") != 0:
-                    self.log_run(f"❌ API错误: {res_json.get('msg')}")
-                    break
-                    
-                data_list = res_json.get("data", [])
-                last_page = res_json.get("last_page", 1)
-                
-                # 累加盈亏并存储记录
-                page_profit = 0.0
-                for item in data_list:
-                    p_no = str(item.get("period_no"))
-                    # 存储到真实账单字典，供表格显示
-                    if p_no not in self.real_bet_results:
-                        self.real_bet_results[p_no] = {
-                            'total_bet': float(item.get("bet", 0)),
-                            'unit_bet': 0.0, # API没给单注，设为0
-                            'win_amount': float(item.get("win_money", 0)),
-                            'profit': float(item.get("profit_loss", 0)),
-                            'total_profit': 0.0, # 累计盈亏由表格逻辑动态计算或显示--
-                            'is_real': True
-                        }
-                    
-                    # profit_loss 字段
-                    pl = float(item.get("profit_loss", 0))
-                    page_profit += pl
-                    
-                total_profit += page_profit
-                
-                if page >= last_page:
-                    break
-                    
-                page += 1
-                # 稍微延时避免请求过快
-                # time.sleep(0.1) 
-                
-            # --- 新增：针对最近的期号获取详细明细以补全单注和投入 ---
-            self.log_run("🔍 正在获取近期下单明细以补全数据...")
-            import datetime
-            today = datetime.datetime.now().strftime("%Y-%m-%d")
-            
-            # 只处理最近的 20 期
-            recent_periods = sorted(self.real_bet_results.keys(), reverse=True)[:20]
-            for p_no in recent_periods:
-                try:
-                    detail_url = f"http://s1.pk999p.xyz/index.php/Orders/LOrder?game_id=2&date={today}&period_no={p_no}&status=0&order_no=&page=1&limit=50"
-                    detail_res = requests.get(detail_url, headers=headers, timeout=5)
-                    if detail_res.status_code == 200:
-                        detail_json = detail_res.json()
-                        if detail_json.get("code") == 0:
-                            orders = detail_json.get("data", [])
-                            if orders:
-                                # 计算该期的总投入和平均单注（或者取第一个单注）
-                                t_bet = 0.0
-                                t_prize = 0.0
-                                u_bet = 0.0
-                                for o in orders:
-                                    t_bet += float(o.get("CM", 0))
-                                    t_prize += float(o.get("CM_prize", 0))
-                                    if u_bet == 0: u_bet = float(o.get("CM", 0))
-                                
-                                # 更新到 real_bet_results
-                                if p_no in self.real_bet_results:
-                                    self.real_bet_results[p_no]['total_bet'] = t_bet
-                                    self.real_bet_results[p_no]['unit_bet'] = u_bet
-                                    self.real_bet_results[p_no]['win_amount'] = t_prize
-                                    # 盈亏重新计算以防万一
-                                    self.real_bet_results[p_no]['profit'] = t_prize - t_bet
-                except:
-                    continue
-            # -------------------------------------------------------
-            
-            self.log_run(f"✅ 同步完成! 历史总盈亏: {total_profit:.2f}")
-            self.lbl_real_profit.setText(f"真实账户盈亏: {total_profit:.2f}")
-            
-            # 同时更新头部显示
-            self.lbl_real_profit_header.setText(f"{total_profit:.2f}")
-            
-            # 同步完成后刷新表格和图表
-            self.update_history_table()
-            self.update_chart()
-            
-            # 重新计算历史极值
-            self.calculate_historical_extremes()
-            
-            # 根据盈亏设置颜色
-            if total_profit > 0:
-                self.lbl_real_profit.setStyleSheet("font-weight: bold; color: green;")
-                self.lbl_real_profit_header.setStyleSheet("color: green; font-weight: bold; font-size: 14px;")
-            elif total_profit < 0:
-                self.lbl_real_profit.setStyleSheet("font-weight: bold; color: red;")
-                self.lbl_real_profit_header.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
-            else:
-                self.lbl_real_profit.setStyleSheet("font-weight: bold; color: black;")
-                self.lbl_real_profit_header.setStyleSheet("color: black; font-weight: bold; font-size: 14px;")
-                
-        except Exception as e:
-            self.log_run(f"❌ 同步异常: {e}")
-        finally:
-            self.btn_sync_profit.setEnabled(True)
-            self.btn_sync_profit.setText("同步真实盈亏")
+        # 同步完成后刷新表格和图表
+        self.update_history_table()
+        self.update_chart()
+        self.calculate_historical_extremes()
+        
+        # 根据盈亏设置颜色
+        if total_profit > 0:
+            self.lbl_real_profit.setStyleSheet("font-weight: bold; color: green;")
+            self.lbl_real_profit_header.setStyleSheet("color: green; font-weight: bold; font-size: 14px;")
+        elif total_profit < 0:
+            self.lbl_real_profit.setStyleSheet("font-weight: bold; color: red;")
+            self.lbl_real_profit_header.setStyleSheet("color: red; font-weight: bold; font-size: 14px;")
+        else:
+            self.lbl_real_profit.setStyleSheet("font-weight: bold; color: black;")
+            self.lbl_real_profit_header.setStyleSheet("color: black; font-weight: bold; font-size: 14px;")
+        
+        self.btn_sync_profit.setEnabled(True)
+        self.btn_sync_profit.setText("同步真实盈亏")
+    
+    def on_account_sync_error(self, error_msg):
+        """账单同步错误回调"""
+        self.log_run(f"❌ {error_msg}")
+        self.btn_sync_profit.setEnabled(True)
+        self.btn_sync_profit.setText("同步真实盈亏")
 
     def update_numbers_display(self):
         self.lbl_numbers_count.setText(f"当前已导入号码: {len(self.my_numbers)} 个")
@@ -1628,28 +2341,53 @@ class Canada28Simulator(QMainWindow):
             
     def on_timer_tick(self):
         """定时器回调"""
-        # 1. 本地倒计时更新 (每秒)
+        
         # 1. 本地倒计时更新 (每秒)
         if hasattr(self, 'countdown_target_monotonic'):
-            import time
             remaining = int(self.countdown_target_monotonic - time.monotonic())
             if remaining < 0: remaining = 0
             mins, secs = divmod(remaining, 60)
             self.lbl_countdown.setText(f"{mins:02d}:{secs:02d}")
             
-        # 2. 定期同步数据 (每5秒)
-        if datetime.now().second % 5 == 0:
+        # 2. 定期同步数据 (每5秒) - 添加防抖和Token检查
+        if not hasattr(self, '_last_refresh_time'):
+            self._last_refresh_time = 0
+        
+        current_time = time.time()
+        # 防抖：确保至少间隔5秒 + Token有效才刷新
+        if (current_time - self._last_refresh_time) >= 5.0 and self.token:
+            self._last_refresh_time = current_time
             self.refresh_data()
             
     def refresh_data(self):
-        """刷新数据"""
+        """刷新数据（完全异步版本，避免阻塞UI）"""
         if not self.token:
             return
-
-        # 1. 获取实时数据 (包含倒计时、最新结果、余额)
-        realtime_data = self.data_manager.get_realtime_data()
         
-        if realtime_data:
+        # 性能优化：防止并发刷新导致请求堆积和UI卡顿
+        if self.is_refreshing_data:
+            return
+        
+        # 优化: 如果正在同步数据，跳过本次刷新避免重复触发
+        if hasattr(self, 'sync_worker') and self.sync_worker.isRunning():
+            return
+
+        # 检查是否已有Worker在运行
+        if hasattr(self, 'realtime_worker') and self.realtime_worker.isRunning():
+            return
+
+        # 标记开始刷新
+        self.is_refreshing_data = True
+        
+        # 启动异步Worker获取实时数据
+        self.realtime_worker = RealtimeDataWorker(self.data_manager)
+        self.realtime_worker.success_signal.connect(self.on_realtime_data_success)
+        self.realtime_worker.failed_signal.connect(self.on_realtime_data_failed)
+        self.realtime_worker.start()
+    
+    def on_realtime_data_success(self, realtime_data):
+        """实时数据获取成功回调"""
+        try:
             # 更新余额
             user_data = realtime_data.get('user', {})
             balance = user_data.get('CM_surplus')
@@ -1673,8 +2411,6 @@ class Canada28Simulator(QMainWindow):
             self.lbl_draw_result.setText(last_result)
             
             # 3. 右侧倒计时标题显示 "下期期号 + 状态"
-            # 根据JS逻辑: 0: 距离开盘, 1: 距离封盘, 2: 距离开奖
-            # 所以 1 才是正在开盘中，可以下单
             status_map = {0: "距离开盘:", 1: "距离封盘:", 2: "距离开奖:"}
             period_status = n_period.get('period_status', 0)
             
@@ -1691,7 +2427,6 @@ class Canada28Simulator(QMainWindow):
             server_at = realtime_data.get('server_at')
             
             if finish_at:
-                import time
                 # 计算剩余秒数
                 remaining_seconds = 0
                 
@@ -1721,7 +2456,9 @@ class Canada28Simulator(QMainWindow):
                 if last_period != self.last_processed_period:
                     # 只有当这是新的一期时，才去同步完整历史数据并计算
                     print(f"🔔 检测到新开奖: {last_period} -> {last_result}")
-                    self.data_manager.sync_historical_data()
+                    
+                    # 使用后台线程同步（避免UI阻塞）
+                    self.start_background_sync()
                     
                     # 获取完整的本地数据来处理 (因为 p_period 信息不全，缺赔率等)
                     latest_local = self.data_manager.get_local_latest()
@@ -1730,22 +2467,40 @@ class Canada28Simulator(QMainWindow):
                             self.process_new_draw(latest_local)
                         self.last_processed_period = last_period
                         self.update_history_table()
-        else:
-            # 获取实时数据失败，通常是 Token 过期
-            self.lbl_login_status.setText("Token已过期")
-            self.lbl_login_status.setStyleSheet("color: red; font-weight: bold;")
+        finally:
+            # 重置刷新标志
+            self.is_refreshing_data = False
+    
+    def on_realtime_data_failed(self, error_msg):
+        """实时数据获取失败回调（优化：区分网络错误和Token过期）"""
+        try:
+            # 只有在明确是认证问题时才标记Token过期
+            # 网络超时、JSON解析错误等不应该改变登录状态
+            is_auth_error = False
             
-            if not self.token_expired_logged:
-                self.log_run("⚠️ Token已过期或无效，请在浏览器中重新登录")
-                self.token_expired_logged = True
+            # 检查是否是认证相关的错误
+            if "401" in error_msg or "403" in error_msg or "unauthorized" in error_msg.lower():
+                is_auth_error = True
             
-            # 自动弹出浏览器面板
-            if not self.browser_panel.isVisible():
-                self.toggle_browser()
-            
-            # 回退到旧逻辑尝试同步历史
-            self.data_manager.sync_historical_data()
-            self.update_history_table()
+            # 只在确认是认证错误时才更新登录状态
+            if is_auth_error:
+                self.lbl_login_status.setText("Token已过期")
+                self.lbl_login_status.setStyleSheet("color: red; font-weight: bold;")
+                
+                if not self.token_expired_logged:
+                    self.log_run("⚠️ Token已过期或无效，请在浏览器中重新登录")
+                    self.token_expired_logged = True
+                
+                # 自动弹出浏览器面板
+                if not self.browser_panel.isVisible():
+                    self.toggle_browser()
+            else:
+                # 临时网络问题，不改变登录状态，只记录日志
+                # 不频繁记录，避免日志刷屏
+                pass
+        finally:
+            # 重置刷新标志
+            self.is_refreshing_data = False
             
     def start_backtest(self):
         """开始回测"""
@@ -1913,6 +2668,9 @@ class Canada28Simulator(QMainWindow):
         # 2. 恢复图表
         self.update_chart()
         
+        # 实时更新号码统计（新增功能）
+        self.update_number_stats_display()
+        
         # 3. 恢复极值统计 (重新计算而不是重置)
         self.calculate_historical_extremes()
         
@@ -2018,6 +2776,280 @@ class Canada28Simulator(QMainWindow):
             self.ax.plot(range(len(profits)), profits, 'b-', marker='o', markersize=3)
             
         self.canvas.draw()
+    
+    # === 号码冷热统计功能 ===
+    
+    def calculate_number_stats(self, start_period=None, end_period=None, days=None):
+        """
+        计算号码统计
+        
+        Args:
+            start_period: 起始期号（可选）
+            end_period: 结束期号（可选）
+            days: 最近N天（可选，优先级高于期号）
+        
+        Returns:
+            dict: {'000': {'count': 10, 'last_appear': '3385540', 'last_date': '2026-01-18'}, ...}
+        """
+        # 获取所有历史数据
+        data_list = self.data_manager.read_all_local_data()
+        
+        # 更新冷门导出界面的提示信息
+        if hasattr(self, 'lbl_cold_hint') and data_list:
+            count = len(data_list)
+            self.lbl_cold_hint.setText(f"(库内共 {count} 期, 日均≈402)")
+            
+        if not data_list:
+            return {}
+        
+        # 按日期筛选
+        if days:
+            from datetime import datetime, timedelta
+            cutoff_date = datetime.now() - timedelta(days=days)
+            data_list = [d for d in data_list 
+                        if datetime.strptime(d['overt_at'].split()[0], '%Y-%m-%d') >= cutoff_date]
+        # 按期号筛选
+        else:
+            if start_period:
+                data_list = [d for d in data_list if int(d['period_no']) >= start_period]
+            if end_period:
+                data_list = [d for d in data_list if int(d['period_no']) <= end_period]
+        
+        # 统计号码出现次数
+        stats = {}
+        for data in data_list:
+            number = data['number_overt'].replace(',', '')
+            if number not in stats:
+                stats[number] = {'count': 0, 'last_appear': None, 'last_date': None}
+            
+            stats[number]['count'] += 1
+            stats[number]['last_appear'] = data['period_no']
+            stats[number]['last_date'] = data['overt_at'].split()[0] if 'overt_at' in data else None
+        
+        return stats
+    
+    def get_hot_numbers(self, limit=20, **kwargs):
+        """
+        获取热门号码（出现频率高）
+        
+        Args:
+            limit: 返回前N个，None表示全部
+            **kwargs: 传递给calculate_number_stats的参数
+        
+        Returns:
+            list: [(number, stats), ...] 按出现次数降序
+        """
+        stats = self.calculate_number_stats(**kwargs)
+        if not stats:
+            return []
+        
+        # 按出现次数降序排序
+        sorted_stats = sorted(stats.items(), key=lambda x: x[1]['count'], reverse=True)
+        
+        if limit:
+            return sorted_stats[:limit]
+        return sorted_stats
+    
+    def get_cold_numbers(self, limit=20, **kwargs):
+        """
+        获取冷门号码（出现频率低）
+        
+        Args:
+            limit: 返回前N个，None表示全部
+            **kwargs: 传递给calculate_number_stats的参数
+        
+        Returns:
+            list: [(number, stats), ...] 按出现次数升序
+        """
+        stats = self.calculate_number_stats(**kwargs)
+        if not stats:
+            return []
+        
+        # 按出现次数升序排序
+        sorted_stats = sorted(stats.items(), key=lambda x: x[1]['count'])
+        
+        if limit:
+            return sorted_stats[:limit]
+        return sorted_stats
+    
+    def on_display_preset_changed(self, text):
+        """显示数量下拉框变更回"""
+        if text == "全部":
+            self.spin_display_count.setValue(1000)
+        elif text == "自定义":
+            pass
+        else:
+            try:
+                val = int(text.replace("前", "").replace("位", ""))
+                self.spin_display_count.setValue(val)
+            except:
+                pass
+
+    def on_period_preset_changed(self, text):
+        """期数下拉框变更"""
+        if text == "全部":
+            self.spin_custom_period.setEnabled(False)
+        elif text == "自定义":
+            self.spin_custom_period.setEnabled(True)
+        else:
+            self.spin_custom_period.setEnabled(True)
+            try:
+                val = int(text.replace("近", "").replace("期", ""))
+                self.spin_custom_period.setValue(val)
+            except:
+                pass
+                
+    def on_days_preset_changed(self, text):
+        """日期下拉框变更"""
+        if text == "不限":
+            self.spin_custom_days.setEnabled(False)
+        elif text == "自定义":
+            self.spin_custom_days.setEnabled(True)
+        else:
+            self.spin_custom_days.setEnabled(True)
+            try:
+                val = int(text.replace("近", "").replace("天", ""))
+                self.spin_custom_days.setValue(val)
+            except:
+                pass
+
+    def search_number_stats(self):
+        """查询指定号码出现次数"""
+        target_num = self.txt_search_number.text().strip()
+        if not target_num:
+            return
+            
+        # 复用当前的统计结果（只是为了重用计算逻辑，其实可以单独计算）
+        # 改为：无论当前筛选如何，查询都基于"全部历史数据"
+        # kwargs = self.get_current_filter_kwargs()
+        stats = self.calculate_number_stats() # 不传参即为全部数据
+        
+        if target_num in stats:
+            count = stats[target_num]['count']
+            last_appear = stats[target_num].get('last_appear', '--')
+            self.lbl_search_result.setText(f"历史总计出现 {count} 次 (最近: {last_appear})")
+        else:
+            self.lbl_search_result.setText("历史数据中未出现")
+
+    def get_current_filter_kwargs(self):
+        """获取当前筛选参数"""
+        data_list = self.data_manager.read_all_local_data()
+        if not data_list:
+            return {}
+            
+        kwargs = {}
+        latest_period = int(data_list[0]['period_no'])
+        
+        # 1. 检查日期筛选 (优先级高)
+        days_selection = self.combo_days_presets.currentText()
+        if days_selection != "不限":
+            kwargs['days'] = self.spin_custom_days.value()
+        else:
+            # 2. 检查期数筛选 (只有日期不限时才生效)
+            period_selection = self.combo_period_presets.currentText()
+            if period_selection == "全部":
+                 pass # 不传参即全部
+            else:
+                 count = self.spin_custom_period.value()
+                 kwargs['start_period'] = latest_period - (count - 1)
+                 
+        return kwargs
+
+    def update_number_stats_display(self):
+        """更新号码统计显示"""
+        # 获取所有数据用于计算范围
+        data_list = self.data_manager.read_all_local_data()
+        if not data_list or len(data_list) == 0:
+            self.lbl_data_range_hint.setText("(暂无数据)")
+            return
+
+        # 更新数据范围提示
+        try:
+            # 假设 list[0] 是最新，list[-1] 是最老
+            latest_date_str = data_list[0].get('overt_at', '').split()[0]
+            oldest_date_str = data_list[-1].get('overt_at', '').split()[0]
+            
+            if latest_date_str and oldest_date_str:
+                d1 = datetime.strptime(latest_date_str, "%Y-%m-%d")
+                d2 = datetime.strptime(oldest_date_str, "%Y-%m-%d")
+                
+                # 确保大减小
+                if d1 < d2:
+                    d1, d2 = d2, d1
+                    
+                days_diff = (d1 - d2).days + 1
+                self.lbl_data_range_hint.setText(f"(数据库共保存 {days_diff} 天数据)")
+        except Exception as e:
+            print(f"计算日期范围出错: {e}")
+
+        # 确定筛选条件
+        kwargs = self.get_current_filter_kwargs()
+        
+        # 获取显示数量
+        # display_text = self.combo_display_count.currentText()
+        # if display_text == "全部":
+        #    limit = None
+        # else:
+        #    limit = int(display_text.replace("前", "").replace("位", ""))
+        limit = self.spin_display_count.value()
+        
+        # 获取热门和冷门号码
+        hot_numbers = self.get_hot_numbers(limit=limit, **kwargs)
+        cold_numbers = self.get_cold_numbers(limit=limit, **kwargs)
+        
+        # 计算总号码数（用于显示计数）
+        total_stats = self.calculate_number_stats(**kwargs)
+        total_count = len(total_stats)
+        
+        # 更新热门号码表格
+        self.table_hot.setRowCount(len(hot_numbers))
+        for i, (number, stats) in enumerate(hot_numbers):
+            self.table_hot.setItem(i, 0, QTableWidgetItem(str(i + 1)))
+            self.table_hot.setItem(i, 1, QTableWidgetItem(number))
+            self.table_hot.setItem(i, 2, QTableWidgetItem(str(stats['count'])))
+            self.table_hot.setItem(i, 3, QTableWidgetItem(stats['last_appear'] or '--'))
+            self.table_hot.setItem(i, 4, QTableWidgetItem(stats['last_date'] or '--'))
+        
+        # 更新冷门号码表格
+        self.table_cold.setRowCount(len(cold_numbers))
+        for i, (number, stats) in enumerate(cold_numbers):
+            self.table_cold.setItem(i, 0, QTableWidgetItem(str(i + 1)))
+            self.table_cold.setItem(i, 1, QTableWidgetItem(number))
+            self.table_cold.setItem(i, 2, QTableWidgetItem(str(stats['count'])))
+            self.table_cold.setItem(i, 3, QTableWidgetItem(stats['last_appear'] or '--'))
+            self.table_cold.setItem(i, 4, QTableWidgetItem(stats['last_date'] or '--'))
+        
+        # 更新计数标签
+        self.lbl_hot_count.setText(f"热门号码 (共显示 {len(hot_numbers)}/{total_count})")
+        self.lbl_cold_count.setText(f"冷门号码 (共显示 {len(cold_numbers)}/{total_count})")
+        
+        # 绘制图表（显示前50个热门号码的分布）
+        self.stats_ax.clear()
+        if hot_numbers:
+            display_hot = hot_numbers[:min(50, len(hot_numbers))]
+            numbers = [n[0] for n in display_hot]
+            counts = [n[1]['count'] for n in display_hot]
+            
+            x_pos = range(len(numbers))
+            rects = self.stats_ax.bar(x_pos, counts, color='#FF6B6B', alpha=0.7)
+            
+            # 设置X轴标签为实际号码
+            self.stats_ax.set_xticks(x_pos)
+            self.stats_ax.set_xticklabels(numbers, rotation=90, fontsize=8)
+            
+            # 在柱状图上方显示数值
+            for rect in rects:
+                height = rect.get_height()
+                self.stats_ax.text(rect.get_x() + rect.get_width()/2., height,
+                        '%d' % int(height),
+                        ha='center', va='bottom', fontsize=8)
+
+            self.stats_ax.set_xlabel('号码')
+            self.stats_ax.set_ylabel('出现次数')
+            self.stats_ax.set_title(f'热门号码出现频率分布 (前{len(display_hot)}位)')
+            self.stats_ax.grid(True, alpha=0.3)
+            
+        self.stats_canvas.draw()
 
     def process_new_draw(self, draw_data):
         """处理新开奖结果"""
@@ -2114,8 +3146,30 @@ class Canada28Simulator(QMainWindow):
                 if self.current_debt < 0: self.current_debt = 0
                 
                 if self.current_debt > 0:
-                    self.log_run(f"🛡️ 赢且回血: 本期赢 {profit:.2f}, 剩余欠款 {self.current_debt:.2f}, 注码保持 {unit_bet:.2f}")
-                    # 注码不变，继续高位打回来
+                    self.log_run(f"🛡️ 赢且回血: 本期赢 {profit:.2f}, 剩余欠款 {self.current_debt:.2f}")
+                    
+                    # 赢了也要递减 (D'Alembert策略 / 用户要求的阶梯回落)
+                    increase_fixed = self.spin_increase_fixed.value()
+                    decrease_rate = self.spin_decrease_rate.value() / 100.0
+                    
+                    new_unit_bet = unit_bet
+                    
+                    # 1. 扣除固定加注部分
+                    fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
+                    if fixed_per_code > 0:
+                        new_unit_bet -= fixed_per_code
+                        
+                    # 2. 扣除比例递减 (如果设置了赢-递减)
+                    if decrease_rate > 0:
+                        new_unit_bet = new_unit_bet * (1 - decrease_rate)
+                        
+                    # 3. 兜底: 不能低于底注
+                    if new_unit_bet < self.base_bet_memory:
+                        new_unit_bet = self.base_bet_memory
+                    if new_unit_bet < 0.1: new_unit_bet = 0.1 # 硬底
+                    
+                    self.spin_unit_bet.setValue(new_unit_bet)
+                    # self.log_run(f"   ↳ 注码回落至: {new_unit_bet:.2f}")
                 else:
                     # 债还清了，重置回底注
                     self.log_run(f"🎉 欠款已还清! 注码重置回 {self.base_bet_memory:.2f}")
@@ -2191,6 +3245,12 @@ class Canada28Simulator(QMainWindow):
     def update_history_table(self):
         """更新历史记录表格"""
         data_list = self.data_manager.read_all_local_data()
+        
+        # 顺便更新冷门导出界面的提示信息
+        if hasattr(self, 'lbl_cold_hint') and data_list:
+            count = len(data_list)
+            self.lbl_cold_hint.setText(f"(库内共 {count} 期, 日均≈402)")
+            
         # 只显示最近50期
         recent_data = data_list[-50:]
         recent_data.reverse() # 最新在最上面
@@ -2372,10 +3432,15 @@ class Canada28Simulator(QMainWindow):
             QMessageBox.critical(self, "错误", f"查询详情时发生异常: {e}")
 
 # === 全局配置 (放在 import 之后, App 初始化之前) ===
-# 解决 浏览器渲染进程崩溃 (代码:40) 的问题
-# 1. 禁用沙盒 (Sandbox): 解决权限/防病毒软件冲突
-# 2. 禁用 GPU 加速: 解决显卡驱动不兼容/虚拟机黑屏问题
-os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer"
+# 根据运行环境智能配置浏览器引擎参数
+if getattr(sys, 'frozen', False):
+    # 打包后的exe：禁用GPU以保证兼容性（解决部分笔记本黑屏问题）
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer"
+    print("🔧 [打包模式] 已禁用GPU加速（兼容模式）")
+else:
+    # 源码运行：仅禁用沙盒，保留GPU加速（性能模式）
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
+    print("🚀 [开发模式] 已启用GPU加速（性能模式）")
 
 if __name__ == "__main__":
     # 高分屏适配
@@ -2403,7 +3468,61 @@ if __name__ == "__main__":
         except Exception as e:
             pass # 即使失败也不影响主程序启动
 
-    app = QApplication(sys.argv)
+    # --- 启动前进行授权验证 ---
+    from license_manager import LicenseManager
+    from activate_dialog import ActivateDialog
+    
+    # 0. 强制联网检查
+    if not LicenseManager.check_network():
+        # 这里需要创建一个临时的app来显示弹窗，或者直接用 ctypes 弹原生窗，或者print后退出
+        # 为了用户体验，尝试弹窗
+        app = QApplication(sys.argv)
+        QMessageBox.critical(None, "错误", "本软件必须联网才能运行！\n请检查您的网络连接。")
+        sys.exit(0)
+    
+    # 1. 尝试读取本地Key
+    saved_key = LicenseManager.load_license()
+    valid = False
+    
+    if saved_key:
+        # 验证是否过期
+        is_ok, msg, expire = LicenseManager.verify_key(saved_key)
+        if is_ok:
+            valid = True
+            print(f"✅ 授权验证通过: {msg}")
+        else:
+            print(f"❌ 授权已失效: {msg}")
+            
+    # 2. 如果未验证通过，显示激活窗口
+    if not valid:
+        # 设置高分屏 (必须在QApplication创建之前)
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+        
+        app = QApplication(sys.argv) # 激活窗口需要app实例
+        
+        dialog = ActivateDialog()
+        # 这里需要 QDialog，上面import加上或者直接用 dialog.Accepted (如果有的话)
+        # 最好是在头部加上 from PyQt5.QtWidgets import QDialog
+        # 或者直接比较 int 值 (Accepted=1)
+        if dialog.exec_() != 1: # QDialog.Accepted == 1
+            sys.exit(0) # 用户取消或者是关闭了窗口，直接退出
+            
+        # 如果激活成功，继续向下执行 (重新创建App实例可能需要注意，但通常可以直接复用或继续)
+        # 注意: 上面已经创建了app，下面不要重复创建
+    
+    # --- 授权通过，启动主程序 ---
+    
+    # 如果上面没有创建app (即直接验证通过了)，这里创建
+    # 如果上面创建了 (因为弹出了激活窗)，这里复用
+    if not QApplication.instance():
+        # 设置高分屏 (验证通过的路径也需要设置)
+        QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+        QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+        app = QApplication(sys.argv)
+    else:
+        app = QApplication.instance()
+        
     window = Canada28Simulator()
     window.show()
     sys.exit(app.exec_())

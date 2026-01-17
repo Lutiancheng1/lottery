@@ -26,9 +26,11 @@ jobs:
       - name: Build EXE
         run: |
           cd Canada28
-          # 使用与本地 build_exe.py 一致的命令
+          # 使用与本地 build_exe.py 一致的命令 (仅打包主程序)
           pyinstaller --name="Canada28Simulator" --onefile --noconsole --clean `
             --hidden-import=generate_top_combinations `
+            --hidden-import=license_manager `
+            --hidden-import=activate_dialog `
             --hidden-import=PyQt5 `
             --hidden-import=PyQt5.QtWebEngineWidgets `
             --hidden-import=requests `
