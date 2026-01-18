@@ -124,21 +124,28 @@ if __name__ == "__main__":
     try:
         dist_dir = "dist"
         if os.path.exists(dist_dir):
-            # 创建一个临时目录用于打包
-            package_dir = os.path.join(dist_dir, "Package_Temp")
+            # 创建一个完全独立的临时目录 (在根目录，不在dist内)
+            package_dir = "Client_Package_Temp"
             if os.path.exists(package_dir):
                 shutil.rmtree(package_dir)
             os.makedirs(package_dir)
             
             # 1. 复制主程序
-            shutil.copy2(os.path.join(dist_dir, "Canada28Simulator.exe"), package_dir)
+            main_exe = os.path.join(dist_dir, "Canada28Simulator.exe")
+            if os.path.exists(main_exe):
+                shutil.copy2(main_exe, package_dir)
+            else:
+                print(f"❌ 错误: 找不到 {main_exe}")
             
-            # 2. 复制数据文件夹
+            # 2. 复制数据文件夹 (排除任何可执行文件，防万一)
             src_data = os.path.join(dist_dir, "Data")
             dst_data = os.path.join(package_dir, "Data")
             if os.path.exists(src_data):
-                shutil.copytree(src_data, dst_data)
+                shutil.copytree(src_data, dst_data, ignore=shutil.ignore_patterns("*.exe", "*.py", "*.spec"))
                 
+            # 调试：打印包内容
+            print(f"   [调试] 包内文件列表: {os.listdir(package_dir)}")
+            
             # 3. 压缩这个临时目录
             shutil.make_archive(zip_name, 'zip', package_dir)
             
@@ -151,13 +158,14 @@ if __name__ == "__main__":
             # --- 额外：单独打包注册机 ---
             print("\n📦 正在生成注册机独立包...")
             keygen_zip = "KeyGen_Admin_Tool"
-            keygen_temp = os.path.join(dist_dir, "KeyGen_Temp")
+            keygen_temp = "KeyGen_Temp" # 同样移到根目录
             if os.path.exists(keygen_temp):
                 shutil.rmtree(keygen_temp)
             os.makedirs(keygen_temp)
             
-            if os.path.exists(os.path.join(dist_dir, "KeyGen_Admin.exe")):
-                shutil.copy2(os.path.join(dist_dir, "KeyGen_Admin.exe"), keygen_temp)
+            keygen_exe = os.path.join(dist_dir, "KeyGen_Admin.exe")
+            if os.path.exists(keygen_exe):
+                shutil.copy2(keygen_exe, keygen_temp)
                 shutil.make_archive(keygen_zip, 'zip', keygen_temp)
                 shutil.rmtree(keygen_temp)
                 print(f"✅ 已生成管理员包: {keygen_zip}.zip (仅含注册机)")

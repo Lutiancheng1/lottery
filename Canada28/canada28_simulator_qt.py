@@ -9,9 +9,10 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QSplitter, QFrame, QLabel, QPushButton, 
                              QLineEdit, QTextEdit, QMessageBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
-                             QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton)
+                             QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton,
+                             QSizePolicy, QGridLayout, QDateEdit)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
-from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType
+from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType, QDate
 from PyQt5.QtGui import QFont, QColor
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -217,6 +218,19 @@ class BacktestWorker(QThread):
         self.data_list = data_list
         self.my_numbers = my_numbers
         self.is_running = True
+        self.is_paused = False
+
+    def stop(self):
+        """停止回测"""
+        self.is_running = False
+        
+    def pause(self):
+        """暂停回测"""
+        self.is_paused = True
+        
+    def resume(self):
+        """恢复回测"""
+        self.is_paused = False
 
     def run(self):
         try:
@@ -224,6 +238,8 @@ class BacktestWorker(QThread):
             current_unit_bet = self.params['unit_bet']
             base_unit_bet = current_unit_bet
             payout_rate = self.params['payout_rate']
+            
+            # 策略参数
             
             # 策略参数
             increase_rate = self.params['increase_rate']
@@ -265,6 +281,12 @@ class BacktestWorker(QThread):
             report += f"策略: 输增{increase_rate*100:.0f}%+{increase_fixed}, 赢减{decrease_rate*100:.0f}%\n\n"
             
             for i, data in enumerate(self.data_list):
+                # 检查暂停
+                while self.is_paused:
+                    if not self.is_running:
+                        break
+                    self.msleep(100)
+                
                 if not self.is_running:
                     stop_reason = "用户停止"
                     break
@@ -327,6 +349,7 @@ class BacktestWorker(QThread):
                 if enable_stop_loss and total_profit <= stop_loss_val:
                     stop_reason = f"止损触发 ({total_profit:.2f})"
                     break
+                    
                     
                 # 动态调整注码
                 # 动态调整注码 (Debt Mode)
@@ -649,8 +672,39 @@ class Canada28Simulator(QMainWindow):
         # 2. 中间控制区 (Tab页)
         self.create_control_tabs()
         
-        # 3. 底部历史记录
+        # 3. 底部历史记录 + 极值统计
+        self.create_stats_panel()
         self.create_history_table()
+        
+        # === 使用 Splitter 上下布局 ===
+        self.v_splitter = QSplitter(Qt.Vertical)
+        self.v_splitter.setHandleWidth(8) # 增加分割条宽度，方便拖动
+        self.v_splitter.setStyleSheet("QSplitter::handle { background-color: #e0e0e0; }") # 视觉提示
+        
+        # 上部：Tab页
+        # 设置QSizePolicy确保它是可以伸缩的
+        self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tabs.setMinimumHeight(100) # 允许压得比较扁
+        self.v_splitter.addWidget(self.tabs)
+        
+        # 下部：统计+历史
+        self.split_bottom_container = QWidget()
+        bottom_layout = QVBoxLayout(self.split_bottom_container)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.addWidget(self.stats_panel_group)
+        bottom_layout.addWidget(self.history_panel_group)
+        
+        # 下半部分也允许伸缩
+        self.split_bottom_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.v_splitter.addWidget(self.split_bottom_container)
+        
+        # 设置初始比例 (Tab 400px : History 剩余)
+        # 注意: 使用 setSizes 比 setStretchFactor 更可靠
+        self.v_splitter.setSizes([450, 400])
+        # 禁止顶部 Tab 被完全折叠
+        self.v_splitter.setCollapsible(0, False)
+        
+        self.simulator_layout.addWidget(self.v_splitter)
         
         self.main_splitter.addWidget(self.simulator_panel)
         
@@ -665,17 +719,19 @@ class Canada28Simulator(QMainWindow):
         # 登录状态
         self.lbl_login_status = QLabel("未登录")
         self.lbl_login_status.setStyleSheet("color: red; font-weight: bold;")
+        self.lbl_login_status = QLabel("未登录")
+        self.lbl_login_status.setStyleSheet("color: red; font-weight: bold;")
         layout.addWidget(QLabel("登录状态:"))
         layout.addWidget(self.lbl_login_status)
         
         # 资金信息
-        layout.addSpacing(20)
+        layout.addSpacing(10)
         layout.addWidget(QLabel("当前余额:"))
         self.lbl_balance = QLabel("0.00")
         self.lbl_balance.setStyleSheet("color: blue; font-weight: bold; font-size: 14px;")
         layout.addWidget(self.lbl_balance)
         
-        layout.addSpacing(20)
+        layout.addSpacing(10)
         layout.addWidget(QLabel("账户盈亏:"))
         self.lbl_real_profit_header = QLabel("--")
         self.lbl_real_profit_header.setStyleSheet("color: green; font-weight: bold; font-size: 14px;")
@@ -718,10 +774,10 @@ class Canada28Simulator(QMainWindow):
         
         draw_layout.addWidget(QLabel("上期期号:"))
         draw_layout.addWidget(self.lbl_current_issue)
-        draw_layout.addSpacing(20)
+        draw_layout.addSpacing(10)
         draw_layout.addWidget(QLabel("开奖号码:"))
         draw_layout.addWidget(self.lbl_draw_result)
-        draw_layout.addSpacing(20)
+        draw_layout.addSpacing(10)
         self.lbl_timer_title = QLabel("倒计时:")
         draw_layout.addWidget(self.lbl_timer_title)
         draw_layout.addWidget(self.lbl_countdown)
@@ -1029,13 +1085,20 @@ class Canada28Simulator(QMainWindow):
         bt_ctrl_layout = QHBoxLayout()
         bt_ctrl_layout.addWidget(QLabel("回测期数:"))
         self.spin_backtest_count = QSpinBox()
-        self.spin_backtest_count.setRange(10, 1000)
+        self.spin_backtest_count.setRange(1, 1000000) # 支持大范围回测
         self.spin_backtest_count.setValue(100)
         bt_ctrl_layout.addWidget(self.spin_backtest_count)
         
         self.btn_backtest = QPushButton("开始回测")
         self.btn_backtest.clicked.connect(self.start_backtest)
         bt_ctrl_layout.addWidget(self.btn_backtest)
+        
+        # 新增暂停按钮
+        self.btn_pause_backtest = QPushButton("暂停")
+        self.btn_pause_backtest.setCheckable(True) # 可切换状态
+        self.btn_pause_backtest.clicked.connect(self.toggle_backtest_pause)
+        self.btn_pause_backtest.setEnabled(False) # 初始不可用
+        bt_ctrl_layout.addWidget(self.btn_pause_backtest)
         
         self.btn_export_backtest = QPushButton("导出记录")
         self.btn_export_backtest.clicked.connect(self.export_backtest_data)
@@ -1064,8 +1127,31 @@ class Canada28Simulator(QMainWindow):
         tab_chart = QWidget()
         chart_layout = QVBoxLayout(tab_chart)
         
+        # 顶部控制条 (右上角)
+        chart_top_layout = QHBoxLayout()
+        chart_top_layout.addStretch()
+        
+        self.btn_chart_pause = QPushButton("⏸ 暂停")
+        self.btn_chart_pause.setCheckable(True)
+        self.btn_chart_pause.setFixedWidth(80)
+        self.btn_chart_pause.clicked.connect(self.toggle_backtest_pause)
+        self.btn_chart_pause.setEnabled(False)
+        chart_top_layout.addWidget(self.btn_chart_pause)
+        
+        chart_top_layout.addSpacing(10)
+        
+        # 这里的按钮改为 "开始回测" (与Tab3同步)
+        self.btn_chart_start = QPushButton("开始回测")
+        self.btn_chart_start.setFixedWidth(100)
+        self.btn_chart_start.setStyleSheet("background-color: #4CAF50; color: white;")
+        self.btn_chart_start.clicked.connect(self.start_backtest)
+        chart_top_layout.addWidget(self.btn_chart_start)
+        
+        chart_layout.addLayout(chart_top_layout)
+        
         self.figure = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvas(self.figure)
+        self.canvas.setMinimumSize(100, 150) # 允许缩小
         self.ax = self.figure.add_subplot(111)
         self.ax.set_title("累计盈亏走势")
         self.ax.set_xlabel("期数")
@@ -1085,12 +1171,9 @@ class Canada28Simulator(QMainWindow):
         filter_layout.setContentsMargins(5, 5, 5, 5) # 减少边距
         filter_layout.setSpacing(5) # 减少间距
         
-        # 第一行：筛选条件 + 搜索功能
+        # 第一行：筛选条件 (期数 + 日期)
         h1 = QHBoxLayout()
         h1.setContentsMargins(0, 0, 0, 0)
-        h1.setSpacing(15) 
-        
-        # --- 左侧：筛选条件 ---
         
         # 期数筛选
         h1.addWidget(QLabel("<b>期数:</b>"))
@@ -1111,43 +1194,51 @@ class Canada28Simulator(QMainWindow):
         self.combo_days_presets.setCurrentText("不限")
         h1.addWidget(self.combo_days_presets)
         
-        self.spin_custom_days = QSpinBox()
-        self.spin_custom_days.setRange(1, 3650)
-        self.spin_custom_days.setValue(30)
-        # 默认禁用日期输入框（因为默认是不限）
-        self.spin_custom_days.setEnabled(False) 
-        h1.addWidget(self.spin_custom_days)
+        # 自定义日期范围
+        self.date_edit_start = QDateEdit()
+        self.date_edit_start.setDisplayFormat("yyyy-MM-dd")
+        self.date_edit_start.setCalendarPopup(True)
+        self.date_edit_start.setEnabled(False)
+        self.date_edit_start.setFixedWidth(100)
+        h1.addWidget(self.date_edit_start)
         
+        h1.addWidget(QLabel("-"))
+        
+        self.date_edit_end = QDateEdit()
+        self.date_edit_end.setDisplayFormat("yyyy-MM-dd")
+        self.date_edit_end.setCalendarPopup(True)
+        self.date_edit_end.setDate(QDate.currentDate())
+        self.date_edit_end.setEnabled(False)
+        self.date_edit_end.setFixedWidth(100)
+        h1.addWidget(self.date_edit_end)
+        
+        # 数据范围提示
+        self.lbl_valid_date_range = QLabel("") 
+        self.lbl_valid_date_range.setStyleSheet("color: #666; font-size: 11px; margin-left: 5px; font-weight: bold;")
+        h1.addWidget(self.lbl_valid_date_range)
+        
+        # 初始化读取并显示库内范围
+        try:
+            temp_list = self.data_manager.read_all_local_data()
+            if temp_list and len(temp_list) > 0:
+                d1_str = temp_list[0]['overt_at'].split()[0]
+                d2_str = temp_list[-1]['overt_at'].split()[0]
+                
+                # 简单比较日期字符串
+                if d1_str > d2_str:
+                    d1_str, d2_str = d2_str, d1_str
+                    
+                self.lbl_valid_date_range.setText(f"库内: {d1_str} -> {d2_str}")
+        except:
+            pass
+
         # 关联逻辑
         self.combo_period_presets.currentTextChanged.connect(self.on_period_preset_changed)
         self.combo_days_presets.currentTextChanged.connect(self.on_days_preset_changed)
         
         h1.addStretch()
-        
-        # --- 右侧：号码查询 ---
-        search_group = QGroupBox()
-        search_layout = QHBoxLayout(search_group)
-        search_layout.setContentsMargins(5, 2, 5, 2)
-        search_layout.setSpacing(5)
-        
-        search_layout.addWidget(QLabel("🔍 查号:"))
-        self.txt_search_number = QLineEdit()
-        self.txt_search_number.setPlaceholderText("号码")
-        self.txt_search_number.setFixedWidth(60)
-        search_layout.addWidget(self.txt_search_number)
-        
-        btn_search = QPushButton("查询")
-        btn_search.clicked.connect(self.search_number_stats)
-        search_layout.addWidget(btn_search)
-        
-        self.lbl_search_result = QLabel("")
-        self.lbl_search_result.setStyleSheet("color: blue; font-weight: bold;")
-        search_layout.addWidget(self.lbl_search_result)
-        
-        h1.addWidget(search_group)
-        
         filter_layout.addLayout(h1)
-        
+
         # 第二行：显示数量 + 数据量提示 + 刷新按钮
         h2 = QHBoxLayout()
         h2.setContentsMargins(0, 0, 0, 0)
@@ -1196,12 +1287,43 @@ class Canada28Simulator(QMainWindow):
         btn_refresh_stats.clicked.connect(self.update_number_stats_display)
         h2.addWidget(btn_refresh_stats)
         
+        filter_layout.addLayout(h2)
+
+        # 第三行：高级工具 (查号)
+        h_tools = QHBoxLayout()
+        h_tools.setContentsMargins(0, 0, 0, 0)
+        
+        # --- 右侧：号码查询 ---
+        search_group = QGroupBox()
+        search_layout = QHBoxLayout(search_group)
+        search_layout.setContentsMargins(5, 2, 5, 2)
+        search_layout.setSpacing(5)
+        
+        search_layout.addWidget(QLabel("🔍 查号:"))
+        self.txt_search_number = QLineEdit()
+        self.txt_search_number.setPlaceholderText("号码")
+        self.txt_search_number.setFixedWidth(60)
+        search_layout.addWidget(self.txt_search_number)
+        
+        btn_search = QPushButton("查询")
+        btn_search.clicked.connect(self.search_number_stats)
+        search_layout.addWidget(btn_search)
+        
+        self.lbl_search_result = QLabel("")
+        self.lbl_search_result.setStyleSheet("color: blue; font-weight: bold;")
+        search_layout.addWidget(self.lbl_search_result)
+        
+        h_tools.addWidget(search_group)
+        h_tools.addStretch()
+        
+        filter_layout.addLayout(h_tools)
+        
         # Main Splitter: 上下分隔
         stats_main_splitter = QSplitter(Qt.Vertical)
         
         # --- 上半部分：筛选区 ---
         # (filter_group 已经创建好了)
-        filter_layout.addLayout(h2)
+
         filter_group.setLayout(filter_layout)
         
         # 添加到 Splitter 上部分
@@ -1273,7 +1395,7 @@ class Canada28Simulator(QMainWindow):
         self.stats_figure.subplots_adjust(bottom=0.25, top=0.9, left=0.08, right=0.95)
         
         self.stats_canvas = FigureCanvas(self.stats_figure)
-        self.stats_canvas.setMinimumSize(400, 200) # 防止压缩过小导致的错误
+        self.stats_canvas.setMinimumSize(100, 150) # 防止压缩过小导致的错误
         self.stats_ax = self.stats_figure.add_subplot(111)
         self.stats_ax.set_title("号码出现频率分布")
         self.stats_ax.set_xlabel("号码排名")
@@ -1292,71 +1414,278 @@ class Canada28Simulator(QMainWindow):
         stats_layout.addWidget(stats_main_splitter)
         
         self.tabs.addTab(tab_stats, "号码统计")
-        
-        self.simulator_layout.addWidget(self.tabs)
-        
-        # 极值统计面板 (插入到Tab下方)
-        self.create_stats_panel()
-
+        # 注意: 不再此处添加到布局，改为在init_ui中统一管理
+        # self.simulator_layout.addWidget(self.tabs)
+        # self.create_stats_panel() 
+    
     def on_tab_changed(self, index):
         """Tab切换回调"""
         tab_text = self.tabs.tabText(index)
         
-        # 如果是"设置与号码"或"号码统计"Tab，隐藏底部的极值统计和历史记录
-        if tab_text == "设置与号码" or tab_text == "号码统计":
-            if hasattr(self, 'stats_panel_group'):
-                self.stats_panel_group.hide()
-            if hasattr(self, 'history_panel_group'):
-                self.history_panel_group.hide()
-        else:
-            # 其他Tab显示
-            if hasattr(self, 'stats_panel_group'):
-                self.stats_panel_group.show()
-            if hasattr(self, 'history_panel_group'):
-                self.history_panel_group.show()
+        # 如果是"设置与号码"或"号码统计"Tab，隐藏整个底部区域(极值+历史)
+        # 盈亏图表现在需要显示历史记录，所以从隐藏列表中移除
+        should_hide = (tab_text == "设置与号码" or tab_text == "号码统计")
+        
+        if hasattr(self, 'split_bottom_container') and hasattr(self, 'v_splitter'):
+            if should_hide:
+                self.split_bottom_container.hide()
+            else:
+                self.split_bottom_container.show()
+                # 检查底部面板高度，如果被压扁了，强制恢复高度
+                sizes = self.v_splitter.sizes()
+                if len(sizes) == 2:
+                    current_bottom_h = sizes[1]
+                    total_h = sum(sizes)
+                    # 如果底部高度几乎为0 (小于50px)，强制恢复到约 40%-50% 的高度
+                    if current_bottom_h < 50:
+                        new_top = int(total_h * 0.55)
+                        new_bottom = total_h - new_top
+                        self.v_splitter.setSizes([new_top, new_bottom])
 
     # === 浏览器相关功能 ===
     def create_stats_panel(self):
-        """创建极值统计面板"""
-        self.stats_panel_group = QGroupBox("极值统计")
-        layout = QHBoxLayout()
+        """创建统计面板 (紧凑版: 双列布局)"""
+        """创建统计面板 (紧凑版: 垂直布局+行内水平布局，避免Grid导致过宽)"""
+        self.stats_panel_group = QGroupBox("统计信息")
+        # 改用 VBox，每行一个 HBox
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(4)
+        main_layout.setContentsMargins(10, 10, 10, 10)
         
-        # 最高投注
-        layout.addWidget(QLabel("最高投注:"))
-        self.lbl_max_bet = QLabel("0")
-        self.lbl_max_bet.setStyleSheet("color: purple; font-weight: bold;")
-        layout.addWidget(self.lbl_max_bet)
+        # --- 第一行: 当前投入 | 单码价格 ---
+        h1 = QHBoxLayout()
+        h1.addWidget(QLabel("当前投入:"))
+        self.lbl_current_input = QLabel("0.00元")
+        self.lbl_current_input.setStyleSheet("color: blue; font-weight: bold;")
+        h1.addWidget(self.lbl_current_input)
         
-        layout.addSpacing(20)
+        line1 = QFrame()
+        line1.setFrameShape(QFrame.VLine)
+        line1.setFrameShadow(QFrame.Sunken)
+        h1.addWidget(line1)
         
-        # 最高盈利
-        layout.addWidget(QLabel("最高盈利:"))
-        self.lbl_max_profit = QLabel("0")
-        self.lbl_max_profit.setStyleSheet("color: green; font-weight: bold;")
-        layout.addWidget(self.lbl_max_profit)
+        h1.addWidget(QLabel("单码价格:"))
+        self.lbl_unit_price = QLabel("0.00元")
+        h1.addWidget(self.lbl_unit_price)
+        h1.addStretch() # 靠左对齐，右侧留空
+        main_layout.addLayout(h1)
         
-        layout.addSpacing(20)
+        # --- 第二行: 总流水 | 累计盈亏 ---
+        h2 = QHBoxLayout()
+        h2.addWidget(QLabel("总流水:"))
+        self.lbl_total_turnover = QLabel("0.00元")
+        self.lbl_total_turnover.setStyleSheet("color: #666;")
+        h2.addWidget(self.lbl_total_turnover)
         
-        # 最大亏损
-        layout.addWidget(QLabel("最大亏损:"))
-        self.lbl_min_profit = QLabel("0")
-        self.lbl_min_profit.setStyleSheet("color: red; font-weight: bold;")
-        layout.addWidget(self.lbl_min_profit)
+        line2 = QFrame()
+        line2.setFrameShape(QFrame.VLine)
+        line2.setFrameShadow(QFrame.Sunken)
+        h2.addWidget(line2)
         
-        layout.addSpacing(20)
+        h2.addWidget(QLabel("累计盈亏:"))
+        self.lbl_accumulated_profit = QLabel("+0.00元")
+        self.lbl_accumulated_profit.setStyleSheet("color: green; font-size: 14px; font-weight: bold;")
+        h2.addWidget(self.lbl_accumulated_profit)
+        h2.addStretch()
+        main_layout.addLayout(h2)
         
-        # 待对冲金额
-        layout.addWidget(QLabel("待回本欠款:"))
-        self.lbl_debt = QLabel("0.00")
-        self.lbl_debt.setStyleSheet("color: green; font-weight: bold;")
-        self.lbl_debt.setToolTip("累计未收回的亏损金额")
-        layout.addWidget(self.lbl_debt)
+        # --- 第三行: 综合战绩 ---
+        h_stats = QHBoxLayout()
+        self.lbl_total_rounds = QLabel("总:0")
+        h_stats.addWidget(self.lbl_total_rounds)
+        h_stats.addSpacing(10)
         
-        layout.addStretch()
+        self.lbl_win_counts = QLabel("中:0")
+        self.lbl_win_counts.setStyleSheet("color: green;")
+        h_stats.addWidget(self.lbl_win_counts)
+        h_stats.addSpacing(10)
+        
+        self.lbl_loss_counts = QLabel("未:0")
+        self.lbl_loss_counts.setStyleSheet("color: red;")
+        h_stats.addWidget(self.lbl_loss_counts)
+        h_stats.addSpacing(10)
+        
+        self.lbl_win_rate_new = QLabel("胜率:0.0%")
+        self.lbl_win_rate_new.setStyleSheet("font-weight: bold;")
+        h_stats.addWidget(self.lbl_win_rate_new)
+        h_stats.addStretch()
+        main_layout.addLayout(h_stats)
+        
+        # --- 第四行: 实时胜率 (号码池) ---
+        h_ref_rate = QHBoxLayout()
+        h_ref_rate.addWidget(QLabel("号码池起始:"))
+        self.spin_ref_start_period = QSpinBox()
+        self.spin_ref_start_period.setRange(1, 99999999)
+        self.spin_ref_start_period.setValue(3380000)
+        self.spin_ref_start_period.setFixedWidth(85)
+        self.spin_ref_start_period.editingFinished.connect(self.calculate_ref_win_rate_static)
+        h_ref_rate.addWidget(self.spin_ref_start_period)
+        
+        h_ref_rate.addSpacing(5)
+        self.lbl_ref_win_rate_dynamic = QLabel("区间胜率: 0.00%")
+        self.lbl_ref_win_rate_dynamic.setStyleSheet("color: blue; font-weight: bold;")
+        h_ref_rate.addWidget(self.lbl_ref_win_rate_dynamic)
+        h_ref_rate.addStretch()
+        main_layout.addLayout(h_ref_rate)
+        
+        # --- 第五行: 胜率止盈设置 ---
+        h_ref_stop = QHBoxLayout()
+        self.chk_ref_stop_enable = QCheckBox("胜率止盈:")
+        self.chk_ref_stop_enable.setToolTip("当'号码池区间胜率'达到设定值时自动停止")
+        h_ref_stop.addWidget(self.chk_ref_stop_enable)
+        
+        h_ref_stop.addWidget(QLabel(">="))
+        self.spin_ref_stop_target = QDoubleSpinBox()
+        self.spin_ref_stop_target.setRange(1.0, 100.0)
+        self.spin_ref_stop_target.setValue(60.00)
+        self.spin_ref_stop_target.setSingleStep(0.1)
+        self.spin_ref_stop_target.setSuffix("%")
+        h_ref_stop.addWidget(self.spin_ref_stop_target)
+        h_ref_stop.addStretch()
+        main_layout.addLayout(h_ref_stop)
+        
+        # --- 第六行: 待对冲 ---
+        h_hedge = QHBoxLayout()
+        h_hedge.addWidget(QLabel("待对冲期数:"))
+        self.lbl_hedge_periods = QLabel("0期")
+        self.lbl_hedge_periods.setStyleSheet("color: orange; font-weight: bold;")
+        h_hedge.addWidget(self.lbl_hedge_periods)
+        
+        lbl_hint = QLabel("(需连赢此数量才开始递减)")
+        lbl_hint.setStyleSheet("color: gray; font-size: 10px;")
+        h_hedge.addWidget(lbl_hint)
+        h_hedge.addStretch()
+        main_layout.addLayout(h_hedge)
+        
         group = self.stats_panel_group
-        group.setLayout(layout)
-        self.simulator_layout.addWidget(group)
+        group.setLayout(main_layout)
+        # self.simulator_layout.addWidget(group) # 移交init_ui管理
+
+    def calculate_ref_win_rate_static(self):
+        """静态计算参考区间胜率 (响应SpinBox修改)"""
+        # 如果回测正在运行，这会导致冲突吗？应该不会，因为只是读取
+        # 但为了UI流畅，如果正在Backtest，也许应该依赖 on_backtest_record 更新
+        if hasattr(self, 'backtest_worker') and self.backtest_worker is not None and self.backtest_worker.isRunning():
+             # 如果正在运行，SpinBox修改后可能需要重置 ref_history_xxx? 
+             # 暂时不处理运行中的修改，或者简单提示
+             return
+
+        start_period = self.spin_ref_start_period.value()
+        if not self.my_numbers:
+            self.lbl_ref_win_rate_dynamic.setText("请先导入号码")
+            return
+            
+        data_list = self.data_manager.read_all_local_data()
+        if not data_list:
+            self.lbl_ref_win_rate_dynamic.setText("暂无数据")
+            return
+            
+        target_rounds = 0
+        target_wins = 0
         
+        try:
+            for d in data_list:
+                p = int(d['period_no'])
+                if p >= start_period:
+                    target_rounds += 1
+                    code = d['number_overt'].replace(',', '')
+                    if code in self.my_numbers:
+                        target_wins += 1
+            
+            rate = (target_wins / target_rounds * 100) if target_rounds > 0 else 0.0
+            self.lbl_ref_win_rate_dynamic.setText(f"区间胜率: {rate:.2f}% ({target_wins}/{target_rounds})")
+            
+        except Exception as e:
+            print(f"Static ref calculation error: {e}")
+        
+    def update_stats_values(self):
+        """更新统计面板数据 (对应新UI)"""
+        if not hasattr(self, 'bet_results'):
+            return
+            
+        total_rounds = 0
+        win_rounds = 0
+        total_turnover = 0.0 # 总流水
+        current_balance = 0.0 # 累计盈亏
+        
+        last_bet_amount = 0.0
+        
+        # 遍历统计
+        sorted_periods = sorted(self.bet_results.keys())
+        for period in sorted_periods:
+            res = self.bet_results[period]
+            # 只统计已结算
+            if res.get('finished', False) or res.get('profit') is not None:
+                total_rounds += 1
+                profit = res.get('profit', 0.0)
+                bet_amt = res.get('total_bet', 0.0)
+                
+                total_turnover += bet_amt
+                current_balance += profit
+                last_bet_amount = bet_amt
+                
+                if profit > 0:
+                    win_rounds += 1
+        
+        loss_rounds = total_rounds - win_rounds
+        
+        # 1. 当前投入 (取最后一期的下注额，如果没有则为0)
+        # 如果正在运行且下一期已生成订单但未结算? 从bet_results可能拿不到
+        # 暂时用"上一期投入"代替，或者读取 spin_unit_bet * num_count
+        current_bet = 0.0
+        if self.my_numbers:
+             current_bet = len(self.my_numbers) * self.spin_unit_bet.value()
+        self.lbl_current_input.setText(f"{current_bet:.2f}元")
+        
+        # 2. 单码价格
+        unit_price = self.spin_unit_bet.value()
+        self.lbl_unit_price.setText(f"{unit_price:.2f}元")
+        
+        # 3. 累计盈亏
+        prefix = "+" if current_balance >= 0 else ""
+        self.lbl_accumulated_profit.setText(f"{prefix}{current_balance:.2f}元")
+        if current_balance >= 0:
+            self.lbl_accumulated_profit.setStyleSheet("color: green; font-size: 16px; font-weight: bold;")
+        else:
+            self.lbl_accumulated_profit.setStyleSheet("color: red; font-size: 16px; font-weight: bold;")
+            
+        # 4. 总流水
+        self.lbl_total_turnover.setText(f"{total_turnover:.2f}元")
+        
+        # 5. 待对冲期数 (估算)
+        # 逻辑：如果亏损，需要多少期盈利才能回本？
+        # 假设每期不仅回本底注，还能赢一点? 
+        # 简单估算：欠款 / (单注 * (赔率/1000 * 995? - 1) * 号码数?) 
+        # 假设是单点下注，中奖盈利 = 单注 * 赔率 - 总投入
+        # 暂时用: 欠款 / (单注 * 赔率 - 单注) ? 加个大约值
+        hedge_periods = 0
+        if current_balance < 0:
+            debt = abs(current_balance)
+            # 估算单期获利能力: 假设中奖能赢多少?
+            # 粗略: 假设每期投入 current_bet，若中奖，返还 current_bet * (赔率/号码数)? 不太准
+            # 就用简单的: 欠款 / (单注 * 赔率 - 投入)
+            payout = self.spin_payout.value()
+            # 假设只中一注
+            one_win_profit = (unit_price * payout) - current_bet
+            if one_win_profit > 0:
+                hedge_periods = int(debt / one_win_profit) + 1
+            else:
+                hedge_periods = 999 # 很难回本
+        
+        self.lbl_hedge_periods.setText(f"{hedge_periods}期")
+        
+        # 6. 计数 (带前缀)
+        self.lbl_total_rounds.setText(f"总:{total_rounds}")
+        self.lbl_win_counts.setText(f"中:{win_rounds}")
+        self.lbl_loss_counts.setText(f"未:{loss_rounds}")
+        
+        # 7. 胜率
+        if total_rounds > 0:
+            rate = (win_rounds / total_rounds) * 100
+            self.lbl_win_rate_new.setText(f"胜率:{rate:.1f}%")
+        else:
+            self.lbl_win_rate_new.setText("胜率:0.0%")
+
     def create_history_table(self):
         """创建历史记录表格"""
         self.history_panel_group = QGroupBox("历史记录")
@@ -1384,7 +1713,7 @@ class Canada28Simulator(QMainWindow):
         layout.addWidget(self.table)
         group = self.history_panel_group
         group.setLayout(layout)
-        self.simulator_layout.addWidget(group)
+        # self.simulator_layout.addWidget(group) # 移交init_ui管理
         
     # === 浏览器相关功能 ===
     
@@ -1639,30 +1968,32 @@ class Canada28Simulator(QMainWindow):
             
         if filepath:
             try:
-                # 读取文件内容
-                # 逐行读取以支持过滤注释行
-                valid_lines = []
+                # 逐行读取以支持过滤注释行和统计表
+                numbers = []
                 with open(filepath, 'r', encoding='utf-8') as f:
                     for line in f:
                         line = line.strip()
                         # 跳过注释行和空行
                         if not line or line.startswith('#'):
                             continue
-                        valid_lines.append(line)
+                            
+                        # 关键修复：检测到统计表头时停止解析，防止重复计数
+                        # 匹配 "出现次数" 或 "出现的次数"
+                        if "号码" in line and "次数" in line:
+                            break
+                            
+                        # 跳过分隔线
+                        if line.startswith('-'):
+                            continue
+                            
+                        # 处理当前行 (替换分隔符)
+                        content = line.replace('\n', ',').replace(' ', ',').replace('，', ',').replace('\t', ',')
+                        parts = content.split(',')
                         
-                content = " ".join(valid_lines)
-                     
-                # 替换常见分隔符为逗号
-                content = content.replace('\n', ',').replace(' ', ',').replace('，', ',').replace('\t', ',')
-                parts = content.split(',')
-                
-                numbers = []
-                for p in parts:
-                    p = p.strip()
-                    if p.isdigit():
-                        # 用户要求：必须是三位数，不支持自动补全
-                        if len(p) == 3:
-                            numbers.append(p)
+                        for p in parts:
+                            p = p.strip()
+                            if p.isdigit() and len(p) == 3:
+                                numbers.append(p)
                 
                 if not numbers:
                     if not silent:
@@ -1798,89 +2129,43 @@ class Canada28Simulator(QMainWindow):
             QMessageBox.critical(self, "错误", f"执行失败: {e}")
 
     def export_stats_table(self, type_str):
-        """导出统计表格数据"""
+        """导出统计表格数据 (完整CSV报表)"""
         try:
             if type_str == "hot":
                 table = self.table_hot
-                default_name = f"hot_numbers_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                default_name = f"hot_numbers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 title = "热门号码统计"
             else:
                 table = self.table_cold
-                default_name = f"cold_numbers_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                default_name = f"cold_numbers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 title = "冷门号码统计"
             
-            # 选择文件
-            # 询问导出格式
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("导出格式")
-            msg_box.setText("请选择您希望导出的格式:")
-            btn_full = msg_box.addButton("完整表格(含统计)", QMessageBox.ActionRole)
-            btn_pure = msg_box.addButton("仅号码(纯数字)", QMessageBox.ActionRole)
-            btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
-            msg_box.exec_()
-            
-            if msg_box.clickedButton() == btn_cancel:
-                return
-                
-            is_pure = (msg_box.clickedButton() == btn_pure)
-            
-            # 根据选择确定后缀和过滤器
-            ext = ".txt" if is_pure else ".csv"
-            filter_str = "Text Files (*.txt)" if is_pure else "CSV Files (*.csv)"
-            
-            if not default_name.endswith(ext):
-                default_name += ext
-                
-            filepath, _ = QFileDialog.getSaveFileName(self, f"导出{title}", default_name, filter_str)
+            # 直接导出CSV，不询问纯数字
+            filepath, _ = QFileDialog.getSaveFileName(self, f"导出{title}", default_name, "CSV Files (*.csv)")
             if not filepath:
                 return
                 
             rows = table.rowCount()
             cols = table.columnCount()
             
-            with open(filepath, 'w', encoding='utf-8-sig' if filepath.endswith('.csv') else 'utf-8') as f:
-                if is_pure:
-                    # 纯数字模式：提取第一列 (假设第一列是号码)
-                    nums = []
-                    for r in range(rows):
-                        item = table.item(r, 0)
-                        if item:
-                            txt = item.text()
-                            if txt: nums.append(txt)
-                    f.write(", ".join(nums))
-                else:
-                    # 完整表格模式
-                    # 写入表头
-                    headers = [table.horizontalHeaderItem(c).text() for c in range(cols)]
-                    if filepath.endswith('.csv'):
-                        f.write(",".join(headers) + "\n")
-                    else:
-                        f.write("\t".join(headers) + "\n")
-                        f.write("-" * 50 + "\n")
-                    
-                    # 写入数据
-                    sep = "," if filepath.endswith(".csv") else "\t"
-                    for r in range(rows):
-                        row_data = []
-                        for c in range(cols):
-                            item = table.item(r, c)
-                            text = item.text() if item else ""
-                            # 处理 CSV 可能需要的转义
-                            if "," in text and sep == ",":
-                                text = f'"{text}"'
-                            row_data.append(text)
-                        f.write(sep.join(row_data) + "\n")
-                        # 处理CSV中的逗号
-                        if filepath.endswith('.csv') and "," in text:
-                            text = f'"{text}"'
+            with open(filepath, 'w', encoding='utf-8-sig', newline='') as f:
+                import csv
+                writer = csv.writer(f)
+                
+                # 写入表头
+                headers = [table.horizontalHeaderItem(c).text() for c in range(cols)]
+                writer.writerow(headers)
+                
+                # 写入数据
+                for r in range(rows):
+                    row_data = []
+                    for c in range(cols):
+                        item = table.item(r, c)
+                        text = item.text() if item else ""
                         row_data.append(text)
-                        
-                    if filepath.endswith('.csv'):
-                        f.write(",".join(row_data) + "\n")
-                    else:
-                        f.write("\t".join(row_data) + "\n")
-                        
-            QMessageBox.information(self, "成功", f"导出成功!\n路径: {filepath}")
+                    writer.writerow(row_data)
+                    
+            QMessageBox.information(self, "成功", f"表格导出成功!\\n路径: {filepath}")
             
         except Exception as e:
             QMessageBox.critical(self, "导出失败", f"发生错误: {e}")
@@ -1901,26 +2186,23 @@ class Canada28Simulator(QMainWindow):
                 
             # 截取最近N期
             if len(data_list) > period_limit:
-                target_data = data_list[:period_limit] # data_list[0]是最新
+                target_data = data_list[-period_limit:] # 取最后N期 (最新)
             else:
                 target_data = data_list
                 
             actual_periods = len(target_data)
             
-            # 3. 统计频率
+            # 3. 统计频率 (修正版：统计三位组合而非单个数字)
             counts = {}
             for d in target_data:
-                nums = d.get('number_overt', '').split(',')
-                # 处理可能的不规范格式 (比如连在一起的)
-                if len(nums) == 1 and len(nums[0]) > 3:
-                     # 尝试每3位分割? 暂时假设格式规范 "123,456"
+                num_str = d.get('number_overt', '').replace(',', '').replace(' ', '').strip()
+                # 确保是3位数字 (例如 "1,2,3" -> "123")
+                if len(num_str) == 3 and num_str.isdigit():
+                     counts[num_str] = counts.get(num_str, 0) + 1
+                elif len(num_str) > 3:
+                     # 容错: 尝试取前3位? 或者忽略
                      pass
                 
-                for n in nums:
-                    n = n.strip()
-                    if not n: continue
-                    counts[n] = counts.get(n, 0) + 1
-                    
             # 补全0-999所有号码
             all_numbers = []
             for i in range(1000):
@@ -2502,8 +2784,76 @@ class Canada28Simulator(QMainWindow):
             # 重置刷新标志
             self.is_refreshing_data = False
             
+    def toggle_backtest_pause(self):
+        """暂停/恢复回测 (同步两个按钮状态)"""
+        if not hasattr(self, 'backtest_worker') or self.backtest_worker is None:
+            return
+            
+        sender = self.sender()
+        is_paused = sender.isChecked()
+        
+        # 同步另一个按钮
+        other_btn = None
+        if sender == self.btn_pause_backtest and hasattr(self, 'btn_chart_pause'):
+             other_btn = self.btn_chart_pause
+        elif hasattr(self, 'btn_chart_pause') and sender == self.btn_chart_pause:
+             other_btn = self.btn_pause_backtest
+             
+        if other_btn:
+            other_btn.blockSignals(True)
+            other_btn.setChecked(is_paused)
+            other_btn.blockSignals(False)
+        
+        # 执行逻辑
+        if is_paused:
+            self.backtest_worker.pause()
+            
+            style = "background-color: orange; color: black;"
+            text = "▶ 继续"
+            
+            self.btn_pause_backtest.setText(text)
+            self.btn_pause_backtest.setStyleSheet(style)
+            if hasattr(self, 'btn_chart_pause'):
+                self.btn_chart_pause.setText(text)
+                self.btn_chart_pause.setStyleSheet(style)
+        else:
+            self.backtest_worker.resume()
+            
+            style = ""
+            text = "⏸ 暂停"
+            
+            self.btn_pause_backtest.setText(text)
+            self.btn_pause_backtest.setStyleSheet(style)
+            if hasattr(self, 'btn_chart_pause'):
+                self.btn_chart_pause.setText(text)
+                self.btn_chart_pause.setStyleSheet(style)
+
+    def request_stop_backtest(self, force=False):
+        """请求停止回测"""
+        if hasattr(self, 'backtest_worker') and self.backtest_worker is not None and self.backtest_worker.isRunning():
+            if not force:
+                reply = QMessageBox.question(self, "停止回测", "确定要停止当前回测吗？", QMessageBox.Yes | QMessageBox.No)
+                if reply != QMessageBox.Yes:
+                    return
+
+            # 执行停止
+            self.backtest_worker.resume() # 假如暂停中，先恢复以便它能退出循环
+            self.backtest_worker.stop()
+            self.btn_backtest.setText("正在停止...")
+            self.btn_backtest.setEnabled(False)
+            # 同步图表页面的按钮
+            if hasattr(self, 'btn_chart_start'):
+                self.btn_chart_start.setText("正在停止...")
+                self.btn_chart_start.setEnabled(False)
+
     def start_backtest(self):
-        """开始回测"""
+        """开始/停止回测"""
+        # 1. 检查是否正在运行，如果是则停止
+        if hasattr(self, 'backtest_worker') and self.backtest_worker is not None and self.backtest_worker.isRunning():
+            self.request_stop_backtest()
+            return
+
+        # --- 开始回测流程 ---
         if not self.my_numbers:
             QMessageBox.warning(self, "警告", "请先导入号码！")
             return
@@ -2529,23 +2879,48 @@ class Canada28Simulator(QMainWindow):
             'enable_take_profit': self.chk_take_profit.isChecked(),
             'take_profit_val': self.spin_take_profit.value(),
             'enable_stop_loss': self.chk_stop_loss.isChecked(),
-            'enable_take_profit': self.chk_take_profit.isChecked(),
-            'take_profit_val': self.spin_take_profit.value(),
-            'enable_stop_loss': self.chk_stop_loss.isChecked(),
             'stop_loss_val': self.spin_stop_loss.value(),
-            'enable_max_bet_limit': self.chk_max_unit_bet.isChecked(),
-            'max_unit_bet_val': self.spin_max_unit_bet.value()
         }
         
         # 准备UI
-        self.btn_backtest.setEnabled(False)
-        self.btn_backtest.setText("回测中...")
+        # self.btn_backtest.setEnabled(False) -> 改为由Stop逻辑控制
+        self.btn_backtest.setText("⏹ 停止回测")
+        self.btn_backtest.setStyleSheet("background-color: #f44336; color: white;") # 红色 Stop 样式
+        # 同步图表页面的按钮
+        if hasattr(self, 'btn_chart_start'):
+            self.btn_chart_start.setText("⏹ 停止回测")
+            self.btn_chart_start.setStyleSheet("background-color: #f44336; color: white;")
+            
         self.txt_backtest_result.setText("正在回测中，请稍候...\n(表格和图表将实时更新)")
         
         # 清空图表和表格
         self.table.setRowCount(0)
         self.ax.clear()
         self.canvas.draw()
+        
+        # === 计算参考区间的"历史"数据 (Backtest Start之前) ===
+        self.ref_history_wins = 0
+        self.ref_history_rounds = 0
+        self.ref_current_wins = 0
+        self.ref_current_rounds = 0
+        
+        ref_start = self.spin_ref_start_period.value()
+        try:
+            if data_list: # Use data_list for reference, not test_data
+                # 确定本次回测的起始期号 (BacktestWorker是从 test_data[0] 开始跑吗? enumerate(self.data_list))
+                # 是的。
+                test_start_p = int(test_data[0]['period_no'])
+                
+                for d in data_list:
+                    p = int(d['period_no'])
+                    if p >= ref_start and p < test_start_p:
+                         self.ref_history_rounds += 1
+                         code = d['number_overt'].replace(',', '')
+                         if code in self.my_numbers:
+                             self.ref_history_wins += 1
+        except Exception as e:
+            print(f"Ref stats error: {e}")
+        # ==================================================
         
         # 启动线程
         self.backtest_worker = BacktestWorker(params, test_data, self.my_numbers)
@@ -2554,14 +2929,34 @@ class Canada28Simulator(QMainWindow):
         self.backtest_worker.error_signal.connect(lambda err: QMessageBox.critical(self, "错误", f"回测出错: {err}"))
         self.backtest_worker.start()
         
-        # 临时存储回测数据用于绘图
+        # === 修复：启用按钮 (重要) ===
+        self.btn_pause_backtest.setEnabled(True)
+        self.btn_pause_backtest.setChecked(False)
+        self.btn_pause_backtest.setText("⏸ 暂停")
+        self.btn_pause_backtest.setStyleSheet("")
+        
+        if hasattr(self, 'btn_chart_pause'):
+             self.btn_chart_pause.setEnabled(True)
+             self.btn_chart_pause.setChecked(False)
+             self.btn_chart_pause.setText("⏸ 暂停")
+             self.btn_chart_pause.setStyleSheet("")
+             
+        if hasattr(self, 'btn_chart_start'):
+             self.btn_chart_start.setEnabled(True)
+        # ===========================
+        
         # 临时存储回测数据用于绘图
         self.backtest_profits = []
         self.backtest_records = [] # 清空旧记录
+        self.backtest_running_turnover = 0.0 # 重置总流水
         
         # 禁用导出和还原按钮
         self.btn_export_backtest.setEnabled(False)
         self.btn_restore_view.setEnabled(False)
+        
+        # 禁用胜率止盈设置 (防止回测过程中修改)
+        self.chk_ref_stop_enable.setEnabled(False)
+        self.spin_ref_stop_target.setEnabled(False)
 
     def on_backtest_record(self, record):
         """处理回测实时记录"""
@@ -2590,10 +2985,75 @@ class Canada28Simulator(QMainWindow):
         
         # 更新显示 (不再更新头部盈亏,头部只显示真实账户盈亏)
         
-        # 3. 更新极值统计
-        self.lbl_max_bet.setText(f"{record['max_bet']:.0f}")
-        self.lbl_max_profit.setText(f"{record['max_profit']:.2f}")
-        self.lbl_min_profit.setText(f"{record['min_profit']:.2f}")
+        # 3. 更新统计面板 (新UI)
+        self.lbl_current_input.setText(f"{record['bet']:.2f}元")
+        self.lbl_unit_price.setText(f"{record['unit_bet']:.2f}元")
+    
+        # 3.1 更新参考区间胜率 (Real-Time Ref Stats)
+        if hasattr(self, 'ref_history_rounds'):
+            self.ref_current_rounds += 1
+            if record['is_win']:
+                self.ref_current_wins += 1
+                
+            total_ref_r = self.ref_history_rounds + self.ref_current_rounds
+            total_ref_w = self.ref_history_wins + self.ref_current_wins
+            
+            ref_rate = (total_ref_w / total_ref_r * 100) if total_ref_r > 0 else 0.0
+            self.lbl_ref_win_rate_dynamic.setText(f"区间胜率: {ref_rate:.2f}% ({total_ref_w}/{total_ref_r})")
+
+            # 检查区间胜率止盈 (Move from Worker to UI Thread for accuracy with Ref Stats)
+            if self.chk_ref_stop_enable.isChecked():
+                 target_rate = self.spin_ref_stop_target.value()
+                 if ref_rate >= target_rate:
+                      # 只触发一次，避免重复弹窗
+                      if hasattr(self, 'backtest_worker') and self.backtest_worker.isRunning():
+                           # 使用 force=True 跳过确认弹窗
+                           self.request_stop_backtest(force=True)
+                           QMessageBox.information(self, "止盈触发", f"号码池区间胜率 ({ref_rate:.2f}%) 已达到目标 ({target_rate}%)，停止回测。")
+                           self.txt_backtest_result.append(f"\n[提示] 胜率止盈触发: {ref_rate:.2f}% >= {target_rate}%")
+
+        # 累计盈亏
+        total_profit = record['total_profit']
+        prefix = "+" if total_profit >= 0 else ""
+        self.lbl_accumulated_profit.setText(f"{prefix}{total_profit:.2f}元")
+        if total_profit >= 0:
+            self.lbl_accumulated_profit.setStyleSheet("color: green; font-size: 16px; font-weight: bold;")
+        else:
+            self.lbl_accumulated_profit.setStyleSheet("color: red; font-size: 16px; font-weight: bold;")
+            
+        # 简单计算累计数据 (或者从worker传递更佳，但这里为了快速修复先自行累加)
+        # 实际上 BacktestWorker 的 record 包含了一些统计? 
+        # 暂时只更新关键的，其他可以通过 len(self.backtest_records) 计算
+        total_rounds = len(self.backtest_records)
+        win_rounds = sum(1 for r in self.backtest_records if r['is_win'])
+        loss_rounds = total_rounds - win_rounds
+        win_rate = (win_rounds / total_rounds * 100) if total_rounds > 0 else 0.0
+        
+        self.lbl_total_rounds.setText(f"总:{total_rounds}")
+        self.lbl_win_counts.setText(f"中:{win_rounds}")
+        self.lbl_loss_counts.setText(f"未:{loss_rounds}")
+        self.lbl_win_rate_new.setText(f"胜率:{win_rate:.1f}%")
+        
+        # 总流水 (需累加)
+        # 性能优化: 可以在类属性中维护一个 running_turnover，而不是每次 sum
+        if not hasattr(self, 'backtest_running_turnover'):
+            self.backtest_running_turnover = 0.0
+        self.backtest_running_turnover += record['bet']
+        self.lbl_total_turnover.setText(f"{self.backtest_running_turnover:.2f}元")
+        
+        # 待对冲 (估算)
+        hedge_periods = 0
+        if total_profit < 0:
+            debt = abs(total_profit)
+            current_bet = record['bet']
+            unit_price = record['unit_bet']
+            payout = self.spin_payout.value() # 使用当前赔率设定
+            one_win_profit = (unit_price * payout) - current_bet
+            if one_win_profit > 0:
+                hedge_periods = int(debt / one_win_profit) + 1
+            else:
+                hedge_periods = 999
+        self.lbl_hedge_periods.setText(f"{hedge_periods}期")
         
         # 4. 更新图表
         self.backtest_profits.append(record['total_profit'])
@@ -2607,8 +3067,33 @@ class Canada28Simulator(QMainWindow):
         """回测完成"""
         self.btn_backtest.setEnabled(True)
         self.btn_backtest.setText("开始回测")
+        # 恢复绿色样式
+        self.btn_backtest.setStyleSheet("background-color: #4CAF50; color: white;")
+        
+        # 重置暂停按钮
+        self.btn_pause_backtest.setEnabled(False)
+        self.btn_pause_backtest.setChecked(False)
+        self.btn_pause_backtest.setText("⏸ 暂停")
+        self.btn_pause_backtest.setStyleSheet("")
+        
+        if hasattr(self, 'btn_chart_pause'):
+            self.btn_chart_pause.setEnabled(False)
+            self.btn_chart_pause.setChecked(False)
+            self.btn_chart_pause.setText("⏸ 暂停")
+            self.btn_chart_pause.setStyleSheet("")
+            
+        # 重置图表页开始按钮
+        if hasattr(self, 'btn_chart_start'):
+            self.btn_chart_start.setText("开始回测")
+            self.btn_chart_start.setStyleSheet("background-color: #4CAF50; color: white;")
+            self.btn_chart_start.setEnabled(True)
+        
         self.btn_export_backtest.setEnabled(True)
         self.btn_restore_view.setEnabled(True)
+        
+        # 恢复胜率止盈设置
+        self.chk_ref_stop_enable.setEnabled(True)
+        self.spin_ref_stop_target.setEnabled(True)
         
         self.txt_backtest_result.setText(report)
         QMessageBox.information(self, "完成", "回测已完成！")
@@ -2779,17 +3264,16 @@ class Canada28Simulator(QMainWindow):
     
     # === 号码冷热统计功能 ===
     
-    def calculate_number_stats(self, start_period=None, end_period=None, days=None):
+    def calculate_number_stats(self, start_period=None, end_period=None, days=None, start_date=None, end_date=None):
         """
         计算号码统计
         
         Args:
             start_period: 起始期号（可选）
             end_period: 结束期号（可选）
-            days: 最近N天（可选，优先级高于期号）
-        
-        Returns:
-            dict: {'000': {'count': 10, 'last_appear': '3385540', 'last_date': '2026-01-18'}, ...}
+            days: 最近N天（可选，优先级高于期号，但低于具体日期）
+            start_date: 开始日期 YYYY-MM-DD (可选)
+            end_date: 结束日期 YYYY-MM-DD (可选)
         """
         # 获取所有历史数据
         data_list = self.data_manager.read_all_local_data()
@@ -2803,7 +3287,17 @@ class Canada28Simulator(QMainWindow):
             return {}
         
         # 按日期筛选
-        if days:
+        if start_date or end_date:
+             filtered_data = []
+             for d in data_list:
+                 date_str = d['overt_at'].split()[0]
+                 if start_date and date_str < start_date:
+                     continue
+                 if end_date and date_str > end_date:
+                     continue
+                 filtered_data.append(d)
+             data_list = filtered_data
+        elif days:
             from datetime import datetime, timedelta
             cutoff_date = datetime.now() - timedelta(days=days)
             data_list = [d for d in data_list 
@@ -2901,17 +3395,45 @@ class Canada28Simulator(QMainWindow):
                 
     def on_days_preset_changed(self, text):
         """日期下拉框变更"""
+        today = QDate.currentDate()
+        self.date_edit_end.setDate(today)
+        
         if text == "不限":
-            self.spin_custom_days.setEnabled(False)
+            self.date_edit_start.setEnabled(False)
+            self.date_edit_end.setEnabled(False)
         elif text == "自定义":
-            self.spin_custom_days.setEnabled(True)
+            self.date_edit_start.setEnabled(True)
+            self.date_edit_end.setEnabled(True)
+            # 自动填充库内范围
+            data_list = self.data_manager.read_all_local_data()
+            if data_list:
+                try:
+                    # 假设 [0] 是最新，[-1] 是最老
+                    latest_str = data_list[0]['overt_at'].split()[0]
+                    oldest_str = data_list[-1]['overt_at'].split()[0]
+                    
+                    # 简单验证日期格式
+                    if "-" in latest_str and "-" in oldest_str:
+                         # 确保 d1 < d2
+                         d1 = QDate.fromString(oldest_str, "yyyy-MM-dd")
+                         d2 = QDate.fromString(latest_str, "yyyy-MM-dd")
+                         if d1 > d2: d1, d2 = d2, d1
+                         
+                         self.date_edit_start.setDate(d1)
+                         self.date_edit_end.setDate(d2)
+                except Exception as e:
+                    print(f"Auto set date range error: {e}")
         else:
-            self.spin_custom_days.setEnabled(True)
+            self.date_edit_start.setEnabled(False) 
+            self.date_edit_end.setEnabled(False) # 预设模式下禁用编辑，只显示
             try:
-                val = int(text.replace("近", "").replace("天", ""))
-                self.spin_custom_days.setValue(val)
+                days = int(text.replace("近", "").replace("天", ""))
+                start_date = today.addDays(-(days - 1))
+                self.date_edit_start.setDate(start_date)
             except:
                 pass
+
+
 
     def search_number_stats(self):
         """查询指定号码出现次数"""
@@ -2943,7 +3465,8 @@ class Canada28Simulator(QMainWindow):
         # 1. 检查日期筛选 (优先级高)
         days_selection = self.combo_days_presets.currentText()
         if days_selection != "不限":
-            kwargs['days'] = self.spin_custom_days.value()
+            kwargs['start_date'] = self.date_edit_start.date().toString("yyyy-MM-dd")
+            kwargs['end_date'] = self.date_edit_end.date().toString("yyyy-MM-dd")
         else:
             # 2. 检查期数筛选 (只有日期不限时才生效)
             period_selection = self.combo_period_presets.currentText()
@@ -3251,6 +3774,9 @@ class Canada28Simulator(QMainWindow):
             count = len(data_list)
             self.lbl_cold_hint.setText(f"(库内共 {count} 期, 日均≈402)")
             
+        # 顺便更新极值和胜率
+        self.update_stats_values()
+        
         # 只显示最近50期
         recent_data = data_list[-50:]
         recent_data.reverse() # 最新在最上面
