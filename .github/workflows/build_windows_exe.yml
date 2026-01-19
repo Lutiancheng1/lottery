@@ -15,7 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12' 
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
@@ -50,12 +50,38 @@ jobs:
           } else {
               Write-Warning "⚠️ Data folder not found in repository."
           }
-          
+
           # 由于 GitHub Action 上传 Artifact 时会自动打包成 ZIP，
           # 所以这里不需要手动压缩，直接上传 dist 目录的内容即可
-          
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Canada28Simulator_Package
           path: Canada28/dist/
+  build-f5:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: |
+          python f5.ab311c.com/build_exe.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Canada28Simulator_F5_Client_Package
+          path: f5.ab311c.com/Canada28Simulator_Client.zip

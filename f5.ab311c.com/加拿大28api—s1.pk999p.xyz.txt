@@ -1,0 +1,799 @@
+登陆api
+
+http://s1.pk999p.xyz/login/check?account=fafa88&password=Aa112211&vercode=qAJR&code=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgxODE2NzgsIm5iZiI6MTc2ODE4MTY3OCwiZXhwIjoxNzY4MTgyMjc4LCJjb2RlIjp7ImNvbXBhbnlfaWQiOjMyNDR9fQ.NBlYzbq9g8t-Ieu772WST1qHeW4wC5bObLA6uGkn4ZE
+
+返回值 
+{
+    "code": 0,
+    "msg": "登录成功",
+    "data": {
+        "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgxODE3MTcsIm5iZiI6MTc2ODE4MTcxNywiZXhwIjoxNzY4NDQwOTE3LCJfdXNlciI6eyJpZCI6MzQ2MywiY29tcGFueV9pZCI6MzI0NCwicm9sZSI6NiwiYWNjb3VudCI6ImZhZmE4OCIsInRvcF9wYXRoIjoiMzI0NCwzNDE1LDM0NjEifX0.Utkg8xcFK6jjuGcx-J4vNzJpPjkxYdlpUC-EPYVp0KI",
+        "site": {
+            "site_title": "加拿大28",
+            "online_limit": 1000,
+            "agree_content": "<h2 style=\"font-weight: 400; margin: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans; white-space: normal; text-align: center; line-height: 36px;\">\r\n    規則及條例\r\n</h2>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    1、當您加入本公司成為管理層時，您必須清楚了解及遵從本公司的所有條例。您在本公司網站開出的第一個下線時，就代表您已同意及接受所有本公司的《規則及條例》。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    2、如官方开奖延迟或开奖结果更改的，本公司有權进行更正处理。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    3、敬告有意与本公司博彩之客户，应注意您所在的国家或居住地可能规定网络博彩不合法，若此情况属实，本公司将不接受任何客户因违反当地博彩或赌博法令所引起之任何责任。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    4、用户明确同意本系统的使用由用户个人承担风险。本系统不作任何类型的担保，不担保服务一定能满足用户的要求，也不担保服务不会受中断，对服务的及时性，安全性，出错发生都不作担保。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    5、用户理解并接受，任何通过本系统服务取得的信息资料的可靠性取决于用户自己，用户自己承担所有风险和责任。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    6、各级管理人员及客户必须对本系统各项功能进行了解及熟悉，任何违反正常使用的操作，后台系统概不负责。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    7、如果会员信用额度超额或者负数引起的争议，一律以公司处理结果为准。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    8、若本平台发现客户以不正当的手法投注，后台将有权取消相应的注单，客户不得异议。\r\n</p>\r\n<p style=\"margin-top: 0px; margin-bottom: 0px; padding: 0px; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); font-family: Verdana, 宋体, Arial, Sans;  white-space: normal;\">\r\n    9、本声明的最终解释权归本系统所有。\r\n</p>"
+        },
+        "user": {
+            "id": 3463,
+            "company_id": 3244,
+            "status": 1,
+            "role": 6,
+            "account": "fafa88",
+            "is_repass": 0,
+            "parent_id": 0,
+            "top_path": "3244,3415,3461",
+            "pass_fail": 0,
+            "is_down": 0,
+            "password": "004d6139e67ad1a9b3833061abc562fd",
+            "top_status": 1,
+            "login_sum": 1,
+            "update_at": "2026-01-12 09:35:16"
+        }
+    }
+}
+
+
+历史记录api 一页返回14条 
+
+请求网址
+http://s1.pk999p.xyz/index.php/GamePeriods/LHistory?game_id=2&page=1&limit=20
+请求方法
+GET
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-headers
+Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With
+access-control-allow-methods
+GET, POST, PATCH, PUT, DELETE, OPTIONS
+access-control-allow-origin
+*
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 12 Jan 2026 01:36:03 GMT
+server
+nginx
+set-cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077; path=/
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077
+host
+s1.pk999p.xyz
+proxy-connection
+keep-alive
+referer
+http://s1.pk999p.xyz/
+token
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgxODE3MTcsIm5iZiI6MTc2ODE4MTcxNywiZXhwIjoxNzY4NDQwOTE3LCJfdXNlciI6eyJpZCI6MzQ2MywiY29tcGFueV9pZCI6MzI0NCwicm9sZSI6NiwiYWNjb3VudCI6ImZhZmE4OCIsInRvcF9wYXRoIjoiMzI0NCwzNDE1LDM0NjEifX0.Utkg8xcFK6jjuGcx-J4vNzJpPjkxYdlpUC-EPYVp0KI
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+需要携带token 和 cookie 
+返回值 
+{
+    "total": 16140,
+    "per_page": 14,
+    "current_page": 1,
+    "last_page": 1153,
+    "data": [
+        {
+            "id": 22245,
+            "period_no": "3383269",
+            "end_at": "2026-01-12 09:33:01",
+            "overt_at": "2026-01-12 09:33:30",
+            "number_overt": "0,6,6",
+            "result_sum": 12,
+            "is_big": 0,
+            "is_odd": 0,
+            "fan_sum": 2,
+            "is_fan_odd": 0,
+            "is_number_overt": 1,
+            "b": "0",
+            "s": "6",
+            "g": "6",
+            "is_big_msg": "小",
+            "is_odd_msg": "双",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "2番"
+        },
+        {
+            "id": 22244,
+            "period_no": "3383268",
+            "end_at": "2026-01-12 09:29:31",
+            "overt_at": "2026-01-12 09:30:00",
+            "number_overt": "3,5,7",
+            "result_sum": 15,
+            "is_big": 1,
+            "is_odd": 1,
+            "fan_sum": 1,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "3",
+            "s": "5",
+            "g": "7",
+            "is_big_msg": "大",
+            "is_odd_msg": "单",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "1番"
+        },
+        {
+            "id": 22243,
+            "period_no": "3383267",
+            "end_at": "2026-01-12 09:26:01",
+            "overt_at": "2026-01-12 09:26:30",
+            "number_overt": "8,2,7",
+            "result_sum": 17,
+            "is_big": 1,
+            "is_odd": 1,
+            "fan_sum": 3,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "8",
+            "s": "2",
+            "g": "7",
+            "is_big_msg": "大",
+            "is_odd_msg": "单",
+            "lhh": "龙",
+            "is_lhh": 1,
+            "fan": "3番"
+        },
+        {
+            "id": 22242,
+            "period_no": "3383266",
+            "end_at": "2026-01-12 09:22:31",
+            "overt_at": "2026-01-12 09:23:00",
+            "number_overt": "1,7,1",
+            "result_sum": 9,
+            "is_big": 0,
+            "is_odd": 1,
+            "fan_sum": 3,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "1",
+            "s": "7",
+            "g": "1",
+            "is_big_msg": "小",
+            "is_odd_msg": "单",
+            "lhh": "和",
+            "is_lhh": 0,
+            "fan": "3番"
+        },
+        {
+            "id": 22241,
+            "period_no": "3383265",
+            "end_at": "2026-01-12 09:19:01",
+            "overt_at": "2026-01-12 09:19:30",
+            "number_overt": "5,7,8",
+            "result_sum": 20,
+            "is_big": 1,
+            "is_odd": 0,
+            "fan_sum": 2,
+            "is_fan_odd": 0,
+            "is_number_overt": 1,
+            "b": "5",
+            "s": "7",
+            "g": "8",
+            "is_big_msg": "大",
+            "is_odd_msg": "双",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "2番"
+        },
+        {
+            "id": 22240,
+            "period_no": "3383264",
+            "end_at": "2026-01-12 09:15:31",
+            "overt_at": "2026-01-12 09:16:00",
+            "number_overt": "6,0,3",
+            "result_sum": 9,
+            "is_big": 0,
+            "is_odd": 1,
+            "fan_sum": 3,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "6",
+            "s": "0",
+            "g": "3",
+            "is_big_msg": "小",
+            "is_odd_msg": "单",
+            "lhh": "龙",
+            "is_lhh": 1,
+            "fan": "3番"
+        },
+        {
+            "id": 22239,
+            "period_no": "3383263",
+            "end_at": "2026-01-12 09:12:01",
+            "overt_at": "2026-01-12 09:12:30",
+            "number_overt": "2,4,5",
+            "result_sum": 11,
+            "is_big": 0,
+            "is_odd": 1,
+            "fan_sum": 1,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "2",
+            "s": "4",
+            "g": "5",
+            "is_big_msg": "小",
+            "is_odd_msg": "单",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "1番"
+        },
+        {
+            "id": 22238,
+            "period_no": "3383262",
+            "end_at": "2026-01-12 09:08:31",
+            "overt_at": "2026-01-12 09:09:00",
+            "number_overt": "9,9,7",
+            "result_sum": 25,
+            "is_big": 1,
+            "is_odd": 1,
+            "fan_sum": 1,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "9",
+            "s": "9",
+            "g": "7",
+            "is_big_msg": "大",
+            "is_odd_msg": "单",
+            "lhh": "龙",
+            "is_lhh": 1,
+            "fan": "1番"
+        },
+        {
+            "id": 22237,
+            "period_no": "3383261",
+            "end_at": "2026-01-12 09:05:01",
+            "overt_at": "2026-01-12 09:05:30",
+            "number_overt": "2,7,0",
+            "result_sum": 9,
+            "is_big": 0,
+            "is_odd": 1,
+            "fan_sum": 2,
+            "is_fan_odd": 0,
+            "is_number_overt": 1,
+            "b": "2",
+            "s": "7",
+            "g": "0",
+            "is_big_msg": "小",
+            "is_odd_msg": "单",
+            "lhh": "龙",
+            "is_lhh": 1,
+            "fan": "2番"
+        },
+        {
+            "id": 22236,
+            "period_no": "3383260",
+            "end_at": "2026-01-12 09:01:31",
+            "overt_at": "2026-01-12 09:02:00",
+            "number_overt": "0,2,2",
+            "result_sum": 4,
+            "is_big": 0,
+            "is_odd": 0,
+            "fan_sum": 2,
+            "is_fan_odd": 0,
+            "is_number_overt": 1,
+            "b": "0",
+            "s": "2",
+            "g": "2",
+            "is_big_msg": "小",
+            "is_odd_msg": "双",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "2番"
+        },
+        {
+            "id": 22235,
+            "period_no": "3383259",
+            "end_at": "2026-01-12 08:58:01",
+            "overt_at": "2026-01-12 08:58:30",
+            "number_overt": "2,1,5",
+            "result_sum": 8,
+            "is_big": 0,
+            "is_odd": 0,
+            "fan_sum": 3,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "2",
+            "s": "1",
+            "g": "5",
+            "is_big_msg": "小",
+            "is_odd_msg": "双",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "3番"
+        },
+        {
+            "id": 22234,
+            "period_no": "3383258",
+            "end_at": "2026-01-12 08:54:31",
+            "overt_at": "2026-01-12 08:55:00",
+            "number_overt": "2,7,8",
+            "result_sum": 17,
+            "is_big": 1,
+            "is_odd": 1,
+            "fan_sum": 2,
+            "is_fan_odd": 0,
+            "is_number_overt": 1,
+            "b": "2",
+            "s": "7",
+            "g": "8",
+            "is_big_msg": "大",
+            "is_odd_msg": "单",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "2番"
+        },
+        {
+            "id": 22233,
+            "period_no": "3383257",
+            "end_at": "2026-01-12 08:51:01",
+            "overt_at": "2026-01-12 08:51:30",
+            "number_overt": "9,5,2",
+            "result_sum": 16,
+            "is_big": 1,
+            "is_odd": 0,
+            "fan_sum": 4,
+            "is_fan_odd": 0,
+            "is_number_overt": 1,
+            "b": "9",
+            "s": "5",
+            "g": "2",
+            "is_big_msg": "大",
+            "is_odd_msg": "双",
+            "lhh": "龙",
+            "is_lhh": 1,
+            "fan": "4番"
+        },
+        {
+            "id": 22232,
+            "period_no": "3383256",
+            "end_at": "2026-01-12 08:47:31",
+            "overt_at": "2026-01-12 08:48:00",
+            "number_overt": "5,8,9",
+            "result_sum": 22,
+            "is_big": 1,
+            "is_odd": 0,
+            "fan_sum": 1,
+            "is_fan_odd": 1,
+            "is_number_overt": 1,
+            "b": "5",
+            "s": "8",
+            "g": "9",
+            "is_big_msg": "大",
+            "is_odd_msg": "双",
+            "lhh": "虎",
+            "is_lhh": 2,
+            "fan": "1番"
+        }
+    ],
+    "code": 0,
+    "msg": "历史期数__cqssc"
+}
+
+
+
+然后在就是 账户余额 和相关信息的 api  
+
+请求网址
+http://s1.pk999p.xyz/index.php/Games/LData?game_id=2
+请求方法
+GET
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-headers
+Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With
+access-control-allow-methods
+GET, POST, PATCH, PUT, DELETE, OPTIONS
+access-control-allow-origin
+*
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 12 Jan 2026 01:37:09 GMT
+server
+nginx
+set-cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077; path=/
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077
+host
+s1.pk999p.xyz
+proxy-connection
+keep-alive
+referer
+http://s1.pk999p.xyz/
+token
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgxODE3MTcsIm5iZiI6MTc2ODE4MTcxNywiZXhwIjoxNzY4NDQwOTE3LCJfdXNlciI6eyJpZCI6MzQ2MywiY29tcGFueV9pZCI6MzI0NCwicm9sZSI6NiwiYWNjb3VudCI6ImZhZmE4OCIsInRvcF9wYXRoIjoiMzI0NCwzNDE1LDM0NjEifX0.Utkg8xcFK6jjuGcx-J4vNzJpPjkxYdlpUC-EPYVp0KI
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值  
+
+{
+    "code": 0,
+    "msg": "游戏信息",
+    "data": {
+        "game": {
+            "id": 2,
+            "game_name": "加拿大28",
+            "game_code": "cqssc",
+            "game_minute": 3,
+            "start_time": "00:00:00",
+            "end_time": "24:00:00",
+            "period_total": 412,
+            "period_done": 0,
+            "game_stop": 5
+        },
+        "user": {
+            "id": 3463,
+            "account": "fafa88",
+            "CM": "10000.00",
+            "CM_surplus": "10000.00",
+            "status": 1,
+            "is_repass": 0,
+            "PL": "0.00"
+        },
+        "n_period": {
+            "period_no": "3383270",
+            "start_at": 1768181610,
+            "end_at": 1768181791,
+            "overt_at": 1768181820,
+            "scene_today": 165,
+            "period_status": 2,
+            "server_at": 1768181829,
+            "finish_at": 1768181830
+        },
+        "p_period": {
+            "period_no": "3383269",
+            "number_overt": "0,6,6",
+            "fan_sum": 2
+        },
+        "$where": [
+            "user_id=3463",
+            "order_date=\"2026-01-12\"",
+            "is_settle=1"
+        ]
+    }
+}
+
+里面有余额和一些其他的信息 你可以看看 
+
+http://s1.pk999p.xyz/index.php/Orders/COrders
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json
+date
+Mon, 12 Jan 2026 05:14:58 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+104
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077
+host
+s1.pk999p.xyz
+origin
+http://s1.pk999p.xyz
+proxy-connection
+keep-alive
+referer
+http://s1.pk999p.xyz/
+token
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgxOTQ3NTQsIm5iZiI6MTc2ODE5NDc1NCwiZXhwIjoxNzY4NDUzOTU0LCJfdXNlciI6eyJpZCI6MzQ2MywiY29tcGFueV9pZCI6MzI0NCwicm9sZSI6NiwiYWNjb3VudCI6ImZhZmE4OCIsInRvcF9wYXRoIjoiMzI0NCwzNDE1LDM0NjEifX0.iQEw2xG1BQff3toBBgWSepmqkE9tlKoe6OwO925X9Ok
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest 
+通过txt文件下单 的 接口 
+参数 type=import&game_id=2&period_no=3383333&t_datas=16&o_datas=16%3A001%3A0.1&position=txt%E5%AF%BC%E5%85%A5 我选择提交的金额为 0.1 下单的号码为 001  
+返回值 
+{
+    "code": 0,
+    "msg": "下单成功",
+    "data": {
+        "user": {
+            "CM": 10000,
+            "CM_surplus": 9999.9
+        },
+        "order": {
+            "period_no": "3383333",
+            "order_no": "3383333145840789",
+            "create_at": 1768194898,
+            "t": [
+                0,
+                0.31113624572753906,
+                1.3589859008789062,
+                0.35500526428222656,
+                4.580974578857422,
+                0
+            ]
+        },
+        "odds": "998"
+    }
+}
+
+我下单多个时  
+
+import
+game_id
+2
+period_no
+3383334
+t_datas
+16
+o_datas
+16:001:0.1,16:002:0.1
+position
+txt导入
+参数 为 
+
+然后 号码为 001 和 002  金额为 0.1 
+
+
+历史账单接口 
+
+http://s1.pk999p.xyz/index.php/Reports/LPeriod?game_id=2&page=1&limit=20
+请求方法
+GET
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-headers
+Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With
+access-control-allow-methods
+GET, POST, PATCH, PUT, DELETE, OPTIONS
+access-control-allow-origin
+*
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 12 Jan 2026 05:33:00 GMT
+server
+nginx
+set-cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077; path=/
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077
+host
+s1.pk999p.xyz
+proxy-connection
+keep-alive
+referer
+http://s1.pk999p.xyz/
+token
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgxOTU5NzAsIm5iZiI6MTc2ODE5NTk3MCwiZXhwIjoxNzY4NDU1MTcwLCJfdXNlciI6eyJpZCI6MzQ2MywiY29tcGFueV9pZCI6MzI0NCwicm9sZSI6NiwiYWNjb3VudCI6ImZhZmE4OCIsInRvcF9wYXRoIjoiMzI0NCwzNDE1LDM0NjEifX0.VUS_nCRiquY7xiqpEQrX-xbqMWFoeZyR39sFbV67MgQ
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值
+
+{
+    "total": 2,
+    "per_page": 20,
+    "current_page": 1,
+    "last_page": 1,
+    "data": [
+        {
+            "order_date": "2026-01-12",
+            "period_no": "3383334",
+            "is_settle": "1",
+            "order_sum": "2",
+            "CM_total": "0.20",
+            "CM_valid": "0.20",
+            "CM_prize": "0.00",
+            "PF_total": "0.0000",
+            "profit_loss": -0.2
+        },
+        {
+            "order_date": "2026-01-12",
+            "period_no": "3383333",
+            "is_settle": "1",
+            "order_sum": "1",
+            "CM_total": "0.10",
+            "CM_valid": "0.10",
+            "CM_prize": "0.00",
+            "PF_total": "0.0000",
+            "profit_loss": -0.1
+        }
+    ],
+    "code": 0,
+    "msg": "期报表"
+}
+
+
+下单的接口 
+
+import
+game_id
+2
+period_no
+3383340
+t_datas
+16
+o_datas
+16:001:0.1,16:002:0.1
+position
+txt导入
+
+如果余额不足够下单 会提示 
+{
+    "code": 9,
+    "msg": "信用余额不足",
+    "data": []
+}
+
+
+
+
+http://s1.pk999p.xyz/index.php/Orders/LOrder?game_id=2&date=2026-01-12&period_no=3383333&status=0&order_no=&page=1&limit=20
+请求方法
+GET
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+access-control-allow-credentials
+true
+access-control-allow-headers
+Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-CSRF-TOKEN, X-Requested-With
+access-control-allow-methods
+GET, POST, PATCH, PUT, DELETE, OPTIONS
+access-control-allow-origin
+*
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 12 Jan 2026 07:02:09 GMT
+server
+nginx
+set-cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077; path=/
+
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+cookie
+PHPSESSID=e44257467fcdfbe922d059fe3cea2077
+host
+s1.pk999p.xyz
+proxy-connection
+keep-alive
+referer
+http://s1.pk999p.xyz/
+token
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJhdWQiOiJodHRwOlwvXC9tZW1iZXIud2Vic2l0ZS5jb20iLCJqdGkiOiIiLCJpYXQiOjE3NjgyMDEyMzMsIm5iZiI6MTc2ODIwMTIzMywiZXhwIjoxNzY4NDYwNDMzLCJfdXNlciI6eyJpZCI6MzQ2MywiY29tcGFueV9pZCI6MzI0NCwicm9sZSI6NiwiYWNjb3VudCI6ImZhZmE4OCIsInRvcF9wYXRoIjoiMzI0NCwzNDE1LDM0NjEifX0.Cy73jljoiRi8sJ1tPrN3ZnLBchjbnjWYdphjEQ6fveU
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+这个是 下注明细的查询接口 能具体根据期号查询你下了多少 号码是什么 是详细的 
+返回为 {
+    "total": 1,
+    "per_page": 20,
+    "current_page": 1,
+    "last_page": 1,
+    "data": [
+        {
+            "id": 94156,
+            "type_id": 16,
+            "order_no": "3383333145840789",
+            "period_no": 3383333,
+            "num": "001",
+            "odds": "998.000",
+            "CM": "0.10",
+            "CM_prize": "0.00",
+            "PF": "0.0000",
+            "order_status": 2,
+            "create_at": "2026-01-12 13:14:58"
+        }
+    ],
+    "code": 0,
+    "msg": "下注明细"
+}

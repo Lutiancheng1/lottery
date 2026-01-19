@@ -1,0 +1,1075 @@
+最新的开奖号码 
+
+http://f5.ab311c.com/member/index/new/open
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 08:51:39 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+2
+content-type
+application/json
+cookie
+BMW=MTc2ODgxMjMyOXxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzI5NDBCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMjk1U0JuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxp_RfQRlzh-brVSv7nVahQWk-iKnbIVctkHMFqN-Feog==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768812333556
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+返回值 
+{
+    "code": 200,
+    "data": {
+        "openNumber": "628",
+        "stageNo": 3386208
+    },
+    "msg": "请求成功"
+}
+
+
+
+用户信息 
+http://f5.ab311c.com/member/index/userInfo
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 08:52:24 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+4
+content-type
+application/json
+cookie
+BMW=MTc2ODgxMjMyOXxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzI5NDBCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMjk1U0JuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxp_RfQRlzh-brVSv7nVahQWk-iKnbIVctkHMFqN-Feog==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768812333556
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值 
+{
+    "code": 200,
+    "data": {
+        "ml": {
+            "remainingLimit": 10000,
+            "totalLimit": 10000,
+            "usedLimit": 0
+        },
+        "userName": "fafa888"
+    },
+    "msg": "请求成功"
+}
+
+下注明细 
+
+
+http://f5.ab311c.com/member/orders/ordersInfoList
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 08:54:15 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+42
+content-type
+application/json
+cookie
+BMW=MTc2ODgxMjMyOXxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzI5NDBCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMjk1U0JuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxp_RfQRlzh-brVSv7nVahQWk-iKnbIVctkHMFqN-Feog==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768812333556
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值 
+
+{
+    "code": 200,
+    "data": {
+        "row": [
+            {
+                "memberBonusAmt": 0,
+                "memberReturnAmt": 0,
+                "orderMemberOrders": 2,
+                "orderMemberTotalAmt": 0.2,
+                "stage": "20260119",
+                "stageNo": 3386210,
+                "ykAmt": -0.2
+            }
+        ],
+        "rowCount": 1
+    },
+    "msg": "请求成功"
+}
+
+
+查询具体期号明细
+
+
+http://f5.ab311c.com/member/orders/ordersInfoList
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 08:58:57 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+62
+content-type
+application/json
+cookie
+BMW=MTc2ODgxMjMyOXxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzI5NDBCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMjk1U0JuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxp_RfQRlzh-brVSv7nVahQWk-iKnbIVctkHMFqN-Feog==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768812333556
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+请求参数 
+{stageNo: "3386210", searchType: "amt", current: 1, size: 20}
+current
+: 
+1
+searchType
+: 
+"amt"
+size
+: 
+20
+stageNo
+: 
+"3386210"
+
+返回值 
+
+
+{
+    "code": 200,
+    "data": {
+        "row": [
+            {
+                "amt": 0.1,
+                "batId": 1768812977800,
+                "betNo": "002",
+                "bigType": 1846934,
+                "bonusAmt": 0,
+                "isWin": 0,
+                "locationType": 3,
+                "memRtnRate": 2,
+                "memberReturnAmt": 0,
+                "odds": 997,
+                "ordId": 1846934,
+                "ordStat": 0,
+                "ordTime": "2026-01-19 16:56:17",
+                "ordRfdTime": "",
+                "ordWays": 6,
+                "owName": "三定位",
+                "smallType": 30,
+                "stName": "口口口",
+                "ykAmt": -0.1
+            },
+            {
+                "amt": 0.1,
+                "batId": 1768812977800,
+                "betNo": "001",
+                "bigType": 1846933,
+                "bonusAmt": 0,
+                "isWin": 0,
+                "locationType": 3,
+                "memRtnRate": 2,
+                "memberReturnAmt": 0,
+                "odds": 997,
+                "ordId": 1846933,
+                "ordStat": 0,
+                "ordTime": "2026-01-19 16:56:17",
+                "ordRfdTime": "",
+                "ordWays": 6,
+                "owName": "三定位",
+                "smallType": 30,
+                "stName": "口口口",
+                "ykAmt": -0.1
+            }
+        ],
+        "rowCount": 2,
+        "stageNo": 3386210
+    },
+    "msg": "请求成功"
+}
+
+
+
+下单接口 
+
+
+http://f5.ab311c.com/member/bet/doOrder
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 08:56:17 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+142
+content-type
+application/json
+cookie
+BMW=MTc2ODgxMjMyOXxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzI5NDBCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMjk1U0JuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxp_RfQRlzh-brVSv7nVahQWk-iKnbIVctkHMFqN-Feog==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768812333556
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+请求参数 
+{"betNoList":[{"bn":"001","am":"0.1"},{"bn":"002","am":"0.1"}],"orderWays":6,"stageNo":"3386210","ock":"ab1970affd827f453bfb7e4f4bce13465f97"}
+
+返回值 
+
+
+{
+    "batId": 0,
+    "failCode": 0,
+    "membersLimit": {
+        "remainingLimit": 10000,
+        "totalLimit": 10000,
+        "updateTime": "2026-01-19 16:56:17",
+        "usedLimit": 0,
+        "userId": 7515
+    },
+    "ordersInfoList": [
+        {
+            "amt": 0.1,
+            "batId": 1768812977800,
+            "betNo": "001",
+            "bigType": 30,
+            "bonusAmt": 0,
+            "isWin": -1,
+            "locationType": 3,
+            "memRtnRate": 0,
+            "odds": 997,
+            "ordId": 1846933,
+            "ordStat": 0,
+            "ordUserId": 7515,
+            "ordWays": 6,
+            "smallType": 30,
+            "stName": "口口口"
+        },
+        {
+            "amt": 0.1,
+            "batId": 1768812977800,
+            "betNo": "002",
+            "bigType": 30,
+            "bonusAmt": 0,
+            "isWin": -1,
+            "locationType": 3,
+            "memRtnRate": 0,
+            "odds": 997,
+            "ordId": 1846934,
+            "ordStat": 0,
+            "ordUserId": 7515,
+            "ordWays": 6,
+            "smallType": 30,
+            "stName": "口口口"
+        }
+    ],
+    "successCode": 2,
+    "totalBetAmount": 0.2
+}
+
+
+历史期号数据 
+http://f5.ab311c.com/member/settingStage/page
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 09:01:08 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+42
+content-type
+application/json
+cookie
+BMW=MTc2ODgxMjMyOXxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzI5NDBCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMjk1U0JuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxp_RfQRlzh-brVSv7nVahQWk-iKnbIVctkHMFqN-Feog==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768812333556
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+传参
+{"current":1,"size":20,"stage":"20260119"}
+这个应该是支持 直接查询某天的全部的接口  然后分页 最高页面里写了200条一次 你可以试试更多的条数 
+返回值 
+{
+    "code": 200,
+    "data": {
+        "row": [
+            {
+                "bit": 0,
+                "hundred": 0,
+                "openNumber": "",
+                "openTime": "2026-01-19 17:01:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386211,
+                "status": 0,
+                "ten": 0
+            },
+            {
+                "bit": 8,
+                "hundred": 3,
+                "openNumber": "368",
+                "openTime": "2026-01-19 16:58:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386210,
+                "status": 1,
+                "ten": 6
+            },
+            {
+                "bit": 3,
+                "hundred": 4,
+                "openNumber": "413",
+                "openTime": "2026-01-19 16:54:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386209,
+                "status": 1,
+                "ten": 1
+            },
+            {
+                "bit": 8,
+                "hundred": 6,
+                "openNumber": "628",
+                "openTime": "2026-01-19 16:51:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386208,
+                "status": 1,
+                "ten": 2
+            },
+            {
+                "bit": 9,
+                "hundred": 1,
+                "openNumber": "189",
+                "openTime": "2026-01-19 16:47:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386207,
+                "status": 1,
+                "ten": 8
+            },
+            {
+                "bit": 9,
+                "hundred": 1,
+                "openNumber": "179",
+                "openTime": "2026-01-19 16:44:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386206,
+                "status": 1,
+                "ten": 7
+            },
+            {
+                "bit": 0,
+                "hundred": 2,
+                "openNumber": "290",
+                "openTime": "2026-01-19 16:40:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386205,
+                "status": 1,
+                "ten": 9
+            },
+            {
+                "bit": 5,
+                "hundred": 5,
+                "openNumber": "555",
+                "openTime": "2026-01-19 16:37:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386204,
+                "status": 1,
+                "ten": 5
+            },
+            {
+                "bit": 3,
+                "hundred": 4,
+                "openNumber": "413",
+                "openTime": "2026-01-19 16:33:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386203,
+                "status": 1,
+                "ten": 1
+            },
+            {
+                "bit": 8,
+                "hundred": 0,
+                "openNumber": "018",
+                "openTime": "2026-01-19 16:30:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386202,
+                "status": 1,
+                "ten": 1
+            },
+            {
+                "bit": 2,
+                "hundred": 9,
+                "openNumber": "962",
+                "openTime": "2026-01-19 16:26:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386201,
+                "status": 1,
+                "ten": 6
+            },
+            {
+                "bit": 1,
+                "hundred": 9,
+                "openNumber": "971",
+                "openTime": "2026-01-19 16:23:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386200,
+                "status": 1,
+                "ten": 7
+            },
+            {
+                "bit": 6,
+                "hundred": 6,
+                "openNumber": "676",
+                "openTime": "2026-01-19 16:19:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386199,
+                "status": 1,
+                "ten": 7
+            },
+            {
+                "bit": 2,
+                "hundred": 0,
+                "openNumber": "062",
+                "openTime": "2026-01-19 16:16:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386198,
+                "status": 1,
+                "ten": 6
+            },
+            {
+                "bit": 6,
+                "hundred": 7,
+                "openNumber": "766",
+                "openTime": "2026-01-19 16:12:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386197,
+                "status": 1,
+                "ten": 6
+            },
+            {
+                "bit": 2,
+                "hundred": 3,
+                "openNumber": "362",
+                "openTime": "2026-01-19 16:09:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386196,
+                "status": 1,
+                "ten": 6
+            },
+            {
+                "bit": 9,
+                "hundred": 2,
+                "openNumber": "289",
+                "openTime": "2026-01-19 16:05:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386195,
+                "status": 1,
+                "ten": 8
+            },
+            {
+                "bit": 7,
+                "hundred": 9,
+                "openNumber": "977",
+                "openTime": "2026-01-19 16:02:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386194,
+                "status": 1,
+                "ten": 7
+            },
+            {
+                "bit": 0,
+                "hundred": 9,
+                "openNumber": "980",
+                "openTime": "2026-01-19 15:58:30",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386193,
+                "status": 1,
+                "ten": 8
+            },
+            {
+                "bit": 2,
+                "hundred": 7,
+                "openNumber": "792",
+                "openTime": "2026-01-19 15:55:00",
+                "stage": 20260119,
+                "month": 202601,
+                "stageNo": 3386192,
+                "status": 1,
+                "ten": 9
+            }
+        ],
+        "rowCount": 292,
+        "stageNos": [
+            3386211,
+            3386210,
+            3386209,
+            3386208,
+            3386207,
+            3386206,
+            3386205,
+            3386204,
+            3386203,
+            3386202,
+            3386201,
+            3386200,
+            3386199,
+            3386198,
+            3386197,
+            3386196,
+            3386195,
+            3386194,
+            3386193,
+            3386192,
+            3386191,
+            3386190,
+            3386189,
+            3386188,
+            3386187,
+            3386186,
+            3386185,
+            3386184,
+            3386183,
+            3386182,
+            3386181,
+            3386180,
+            3386179,
+            3386178,
+            3386177,
+            3386176,
+            3386175,
+            3386174,
+            3386173,
+            3386172,
+            3386171,
+            3386170,
+            3386169,
+            3386168,
+            3386167,
+            3386166,
+            3386165,
+            3386164,
+            3386163,
+            3386162,
+            3386161,
+            3386160,
+            3386159,
+            3386158,
+            3386157,
+            3386156,
+            3386155,
+            3386154,
+            3386153,
+            3386152,
+            3386151,
+            3386150,
+            3386149,
+            3386148,
+            3386147,
+            3386146,
+            3386145,
+            3386144,
+            3386143,
+            3386142,
+            3386141,
+            3386140,
+            3386139,
+            3386138,
+            3386137,
+            3386136,
+            3386135,
+            3386134,
+            3386133,
+            3386132,
+            3386131,
+            3386130,
+            3386129,
+            3386128,
+            3386127,
+            3386126,
+            3386125,
+            3386124,
+            3386123,
+            3386122,
+            3386121,
+            3386120,
+            3386119,
+            3386118,
+            3386117,
+            3386116,
+            3386115,
+            3386114,
+            3386113,
+            3386112,
+            3386111,
+            3386110,
+            3386109,
+            3386108,
+            3386107,
+            3386106,
+            3386105,
+            3386104,
+            3386103,
+            3386102,
+            3386101,
+            3386100,
+            3386099,
+            3386098,
+            3386097,
+            3386096,
+            3386095,
+            3386094,
+            3386093,
+            3386092,
+            3386091,
+            3386090,
+            3386089,
+            3386088,
+            3386087,
+            3386086,
+            3386085,
+            3386084,
+            3386083,
+            3386082,
+            3386081,
+            3386080,
+            3386079,
+            3386078,
+            3386077,
+            3386076,
+            3386075,
+            3386074,
+            3386073,
+            3386072,
+            3386071,
+            3386070,
+            3386069,
+            3386068,
+            3386067,
+            3386066,
+            3386065,
+            3386064,
+            3386063,
+            3386062,
+            3386061,
+            3386060,
+            3386059,
+            3386058,
+            3386057,
+            3386056,
+            3386055,
+            3386054,
+            3386053,
+            3386052,
+            3386051,
+            3386050,
+            3386049,
+            3386048,
+            3386047,
+            3386046,
+            3386045,
+            3386044,
+            3386043,
+            3386042,
+            3386041,
+            3386040,
+            3386039,
+            3386038,
+            3386037,
+            3386036,
+            3386035,
+            3386034,
+            3386033,
+            3386032,
+            3386031,
+            3386030,
+            3386029,
+            3386028,
+            3386027,
+            3386026,
+            3386025,
+            3386024,
+            3386023,
+            3386022,
+            3386021,
+            3386020,
+            3386019,
+            3386018,
+            3386017,
+            3386016,
+            3386015,
+            3386014,
+            3386013,
+            3386012,
+            3386011,
+            3386010,
+            3386009,
+            3386008,
+            3386007,
+            3386006,
+            3386005,
+            3386004,
+            3386003,
+            3386002,
+            3386001,
+            3386000,
+            3385999,
+            3385998,
+            3385997,
+            3385996,
+            3385995,
+            3385994,
+            3385993,
+            3385992,
+            3385991,
+            3385990,
+            3385989,
+            3385988,
+            3385987,
+            3385986,
+            3385985,
+            3385984,
+            3385983,
+            3385982,
+            3385981,
+            3385980,
+            3385979,
+            3385978,
+            3385977,
+            3385976,
+            3385975,
+            3385974,
+            3385973,
+            3385972,
+            3385971,
+            3385970,
+            3385969,
+            3385968,
+            3385967,
+            3385966,
+            3385965,
+            3385964,
+            3385963,
+            3385962,
+            3385961,
+            3385960,
+            3385959,
+            3385958,
+            3385957,
+            3385956,
+            3385955,
+            3385954,
+            3385953,
+            3385952,
+            3385951,
+            3385950,
+            3385949,
+            3385948,
+            3385947,
+            3385946,
+            3385945,
+            3385944,
+            3385943,
+            3385942,
+            3385941,
+            3385940,
+            3385939,
+            3385938,
+            3385937,
+            3385936,
+            3385935,
+            3385934,
+            3385933,
+            3385932,
+            3385931,
+            3385930,
+            3385929,
+            3385928,
+            3385927,
+            3385926,
+            3385925,
+            3385924,
+            3385923,
+            3385922,
+            3385921,
+            3385920
+        ]
+    },
+    "msg": "请求成功"
+}
+
+
+init 接口 应该有开始期号和截止时间的接口 
+
+
+http://f5.ab311c.com/member/index/init
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+127.0.0.1:1082
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+application/json; charset=utf-8
+date
+Mon, 19 Jan 2026 09:32:28 GMT
+server
+nginx
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+content-length
+0
+content-type
+application/json
+cookie
+BMW=MTc2ODgxNDQ0NHxEWDhFQVFMX2dBQUJFQUVRQUFCOF80QUFCQVp6ZEhKcGJtY01EQUFLWTI5a1pWWmxjbWxtZVFWcGJuUTJOQVFHQVB6UzItN0lCbk4wY21sdVp3d0tBQWhzYkhWelpYSkpaQVIxYVc1MEJnUUFfaDFiQm5OMGNtbHVad3dIQUFWemMzTnBaQVZwYm5RMk5BUUdBUHpTMi03WUJuTjBjbWx1Wnd3SUFBWjFiR1YyWld3RGFXNTBCQUlBRGc9PXxnzgXqja-Cs7v5uo1fYaMc2nSZXz4BWdDbRJitZ9FyEw==
+host
+f5.ab311c.com
+origin
+http://f5.ab311c.com
+proxy-connection
+keep-alive
+referer
+http://f5.ab311c.com/index.html?t=1768814470002
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+{
+    "code": 200,
+    "data": {
+        "lampContent": "本公司即日起不接受多会员同套码，请各位会员自行遵守；谢谢合作。",
+        "ejectContent": "",
+        "remainingLimit": 9999.8,
+        "settingStage": {
+            "endTime": "2026-01-19 17:33:00",
+            "remainingTime": 4036,
+            "stage": 20260119,
+            "stageNo": 3386220,
+            "startTime": "2026-01-19 17:29:30"
+        }
+    },
+    "msg": "请求成功"
+}
