@@ -160,11 +160,12 @@ class CanadaDataManager:
             url = f"{self.base_url}/index.php/Games/LData"
             headers = {
                 'token': self.token,
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                'Cookie': self.cookie,
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'X-Requested-With': 'XMLHttpRequest'
             }
-            cookies = {'PHPSESSID': self.cookie} if self.cookie else {}
             params = {'game_id': self.game_id}
-            response = self.session.get(url, params=params, headers=headers, cookies=cookies, timeout=10)
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
             data = response.json()
             if data.get('code') == 0 and 'data' in data:
                 return data['data']
@@ -191,15 +192,16 @@ class CanadaDataManager:
             url = f"{self.base_url}/index.php/GamePeriods/LHistory"
             headers = {
                 'token': self.token,
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                'Cookie': self.cookie,
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'X-Requested-With': 'XMLHttpRequest'
             }
-            cookies = {'PHPSESSID': self.cookie} if self.cookie else {}
             params = {
                 'game_id': self.game_id,
                 'page': page,
                 'limit': limit
             }
-            response = self.session.get(url, params=params, headers=headers, cookies=cookies, timeout=10)
+            response = self.session.get(url, params=params, headers=headers, timeout=10)
             data = response.json()
             if data.get('code') == 0:
                 return data
