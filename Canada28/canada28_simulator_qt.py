@@ -3959,12 +3959,20 @@ class Canada28Simulator(QMainWindow):
 
 # === 全局配置 (放在 import 之后, App 初始化之前) ===
 # 根据运行环境智能配置浏览器引擎参数
+import platform
+
+system_platform = platform.system()
+
 if getattr(sys, 'frozen', False):
     # 打包后的exe：禁用GPU以保证兼容性（解决部分笔记本黑屏问题）
     os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer"
     print("🔧 [打包模式] 已禁用GPU加速（兼容模式）")
+elif system_platform == "Darwin":  # macOS
+    # macOS系统：禁用GPU加速以避免段错误（PyQt5 WebEngine已知问题）
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage"
+    print("🍎 [macOS模式] 已禁用GPU加速（兼容模式，避免段错误）")
 else:
-    # 源码运行：仅禁用沙盒，保留GPU加速（性能模式）
+    # Windows/Linux源码运行：仅禁用沙盒，保留GPU加速（性能模式）
     os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
     print("🚀 [开发模式] 已启用GPU加速（性能模式）")
 
@@ -3972,7 +3980,10 @@ if __name__ == "__main__":
     # 高分屏适配
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
-    QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
+    
+    # OpenGL上下文共享（仅Windows/Linux，macOS上可能导致段错误）
+    if system_platform != "Darwin":
+        QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
     
     # 动态调试模式:如果有 --debug 参数，则开启控制台和日志
     if "--debug" in sys.argv:

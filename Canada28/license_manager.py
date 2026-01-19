@@ -13,18 +13,34 @@ SALT = "CANADA28_VIP_SECRET_888"
 class LicenseManager:
     @staticmethod
     def get_machine_code():
-        """获取机器特征码 (Windows UUID)"""
+        """获取机器特征码 (跨平台支持)"""
+        uuid = None
+        system = platform.system()
+        
         try:
-            # 尝试获取 Windows UUID
-            cmd = "wmic csproduct get uuid"
-            # 加上 stderr=subprocess.DEVNULL 避免报错显示
-            uuid = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL).decode().split('\n')[1].strip()
+            if system == "Windows":
+                # Windows: 使用 WMIC 获取 UUID
+                cmd = "wmic csproduct get uuid"
+                uuid = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL).decode().split('\n')[1].strip()
+            elif system == "Darwin":  # macOS
+                # macOS: 使用 system_profiler 获取硬件 UUID
+                cmd = "system_profiler SPHardwareDataType | grep 'Hardware UUID'"
+                output = subprocess.check_output(cmd, shell=True, stderr=subprocess.DEVNULL).decode()
+                uuid = output.split(':')[1].strip()
+            else:  # Linux 或其他系统
+                # 尝试读取 /etc/machine-id
+                try:
+                    with open('/etc/machine-id', 'r') as f:
+                        uuid = f.read().strip()
+                except:
+                    pass
+                    
+            # 如果 UUID 为空，使用 MAC 地址作为备用
             if not uuid:
-                # 备用方案: MAC地址
                 import uuid as py_uuid
                 uuid = str(py_uuid.getnode())
         except:
-            # 再次备用
+            # 最终备用方案: MAC地址
             import uuid as py_uuid
             uuid = str(py_uuid.getnode())
             
@@ -123,9 +139,24 @@ class LicenseManager:
 
     @staticmethod
     def _get_license_path():
-        """获取唯一的License路径 (存放在AppData, 避免误删)"""
+        """获取唯一的License路径 (存放在AppData, 避免误删, 跨平台支持)"""
         import os
-        app_data = os.getenv('APPDATA') # C:\Users\xxx\AppData\Roaming
+        system = platform.system()
+        
+        if system == "Windows":
+            # Windows: C:\Users\xxx\AppData\Roaming
+            app_data = os.getenv('APPDATA')
+        elif system == "Darwin":  # macOS
+            # macOS: ~/Library/Application Support
+            app_data = os.path.expanduser('~/Library/Application Support')
+        else:  # Linux
+            # Linux: ~/.config
+            app_data = os.path.expanduser('~/.config')
+        
+        if not app_data:
+            # 如果仍然获取失败，使用用户主目录
+            app_data = os.path.expanduser('~')
+            
         save_dir = os.path.join(app_data, "Canada28Simulator")
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
