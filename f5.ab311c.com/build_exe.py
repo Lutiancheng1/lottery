@@ -8,6 +8,13 @@ import os
 import sys
 import shutil
 import subprocess
+import platform
+import io
+
+# 强制输出使用 UTF-8 编码，防止 CI/CD 环境下 UnicodeEncodeError
+if platform.system() == "Windows":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 def check_pyinstaller():
     """检查PyInstaller是否已安装"""
