@@ -167,21 +167,34 @@ class LicenseManager:
         """保存激活码到本地"""
         try:
             path = LicenseManager._get_license_path()
+            print(f"💾 Saving license to: {path}")
+            
+            # Windows下如果文件已存在且隐藏，先取消隐藏
+            if os.path.exists(path) and platform.system() == "Windows":
+                try:
+                    import ctypes
+                    # FILE_ATTRIBUTE_NORMAL = 128
+                    ctypes.windll.kernel32.SetFileAttributesW(path, 128)
+                except:
+                    pass
+            
             with open(path, "w") as f:
                 f.write(key)
+                
             # 尝试隐藏文件 (Windows)
             try:
                 import ctypes
                 ctypes.windll.kernel32.SetFileAttributesW(path, 2) # FILE_ATTRIBUTE_HIDDEN = 2
             except:
                 pass
-        except:
-            pass
+        except Exception as e:
+            print(f"❌ Save license failed: {e}")
             
     @staticmethod
     def load_license():
         """读取本地激活码"""
         path = LicenseManager._get_license_path()
+        print(f"📂 Loading license from: {path}")
         if os.path.exists(path):
             with open(path, "r") as f:
                 return f.read().strip()

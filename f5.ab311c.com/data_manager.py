@@ -34,7 +34,7 @@ class CanadaDataManager:
         self.token = ""
         self.cookie = ""
         self.game_id = 2
-        self.update_threshold = 14
+        self.update_threshold = 100
         self.session = requests.Session()
         
         # 配置重试策略
@@ -245,7 +245,7 @@ class CanadaDataManager:
                 return float(balance)
         return None
 
-    def fetch_remote_history(self, page=1, limit=14) -> Optional[Dict]:
+    def fetch_remote_history(self, page=1, limit=100) -> Optional[Dict]:
         """获取远程历史记录 (适配新接口)"""
         if not self.cookie:
             return None
@@ -321,11 +321,11 @@ class CanadaDataManager:
     def fetch_missing_data(self, gap: int) -> List[Dict]:
         """获取缺失的历史数据"""
         missing_data = []
-        pages_needed = (gap + 13) // 14
+        pages_needed = (gap + 99) // 100
         print(f"📥 需要获取 {pages_needed} 页数据（共约{gap}期）...")
         for page in range(1, pages_needed + 1):
             print(f"📡 正在获取第 {page}/{pages_needed} 页...")
-            data = self.fetch_remote_history(page=page, limit=14)
+            data = self.fetch_remote_history(page=page, limit=100)
             if data and 'data' in data:
                 missing_data.extend(data['data'])
             if page < pages_needed:

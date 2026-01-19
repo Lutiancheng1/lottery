@@ -121,67 +121,64 @@ class AccountSyncWorker(QThread):
             limit = 50
             real_bet_results = {}
             
-            # 第一阶段：获取所有期号的盈亏统计
-            while True:
-                url = f"http://f5.ab311c.com/member/orders/ordersInfoList"
-                payload = {
-                    "current": page,
-                    "size": limit
-                }
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-                    "X-Requested-With": "XMLHttpRequest",
-                    "Content-Type": "application/json",
-                    "Cookie": self.cookie
-                }
-                
-                self.progress_signal.emit(f"📡 请求第 {page} 页数据...")
-                
-                response = requests.post(url, json=payload, headers=headers, timeout=10)
-                if response.status_code != 200:
-                    self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
-                    break
-                    
+            # 第一阶段：获取最近的历史报表 (member/report/history)
+            # 获取最近30天的数据
+            end_date = datetime.datetime.now()
+            start_date = end_date - datetime.timedelta(days=30)
+            
+            url = f"http://f5.ab311c.com/member/report/history"
+            payload = {
+                "startTime": start_date.strftime("%Y-%m-%d"),
+                "endTime": end_date.strftime("%Y-%m-%d"),
+                "current": 1,
+                "size": 100 # 获取足够多的记录
+            }
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/json",
+                "Cookie": self.cookie
+            }
+            
+            self.progress_signal.emit(f"📡 请求历史报表数据...")
+            
+            # 增加超时时间到 30s
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            if response.status_code == 200:
                 res_json = response.json()
-                
-                if res_json.get("code") != 200:
-                    self.error_signal.emit(f"API错误: {res_json.get('msg')}")
-                    break
+                if res_json.get("code") == 200:
+                    data_list = res_json.get("data", {}).get("row", [])
                     
-                data_list = res_json.get("data", {}).get("row", [])
-                row_count = res_json.get("data", {}).get("rowCount", 0)
-                last_page = (row_count + limit - 1) // limit
-                
-                # 累加盈亏并存储记录
-                for item in data_list:
-                    p_no = str(item.get("stageNo"))
-                    
-                    # 转换数值，处理可能的字符串格式
-                    try:
-                        total_bet_val = float(item.get("orderMemberTotalAmt", 0) or 0)
-                        win_amount_val = float(item.get("memberBonusAmt", 0) or 0)
-                        profit_val = float(item.get("ykAmt", 0) or 0)
-                    except (ValueError, TypeError):
-                        total_bet_val = 0.0
-                        win_amount_val = 0.0
-                        profit_val = 0.0
+                    # 累加盈亏并存储记录
+                    for item in data_list:
+                        p_no = str(item.get("stageNo"))
+                        
+                        # 转换数值
+                        try:
+                            # 报表接口字段：orderMemberTotalAmt(总投), memberBonusAmt(中奖), ykAmt(盈亏)
+                            total_bet_val = float(item.get("orderMemberTotalAmt", 0) or 0)
+                            win_amount_val = float(item.get("memberBonusAmt", 0) or 0)
+                            profit_val = float(item.get("ykAmt", 0) or 0)
+                        except (ValueError, TypeError):
+                            total_bet_val = 0.0
+                            win_amount_val = 0.0
+                            profit_val = 0.0
 
-                    if p_no not in real_bet_results:
-                        real_bet_results[p_no] = {
-                            'total_bet': total_bet_val,
-                            'unit_bet': 0.0,
-                            'win_amount': win_amount_val,
-                            'profit': profit_val,
-                            'total_profit': 0.0,
-                            'is_real': True
-                        }
-                    
-                    total_profit += profit_val
-                
-                if not data_list or page >= last_page:
-                    break
-                    
-                page += 1
+                        if p_no not in real_bet_results:
+                            real_bet_results[p_no] = {
+                                'total_bet': total_bet_val,
+                                'unit_bet': 0.0, # 稍后从明细获取
+                                'win_amount': win_amount_val,
+                                'profit': profit_val,
+                                'total_profit': 0.0,
+                                'is_real': True
+                            }
+                        
+                        total_profit += profit_val
+                else:
+                     self.error_signal.emit(f"API错误: {res_json.get('msg')}")
+            else:
+                 self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
                 
             # 第二阶段：获取最近20期的详细明细
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
@@ -197,7 +194,8 @@ class AccountSyncWorker(QThread):
                         "current": 1,
                         "size": 50
                     }
-                    detail_res = requests.post(detail_url, json=detail_payload, headers=headers, timeout=5)
+                    # 增加超时时间到 15s
+                    detail_res = requests.post(detail_url, json=detail_payload, headers=headers, timeout=15)
                     if detail_res.status_code == 200:
                         detail_json = detail_res.json()
                         if detail_json.get("code") == 200:
@@ -356,7 +354,8 @@ class BacktestWorker(QThread):
                     'max_profit': max_profit,
                     'max_profit_issue': max_profit_issue,
                     'min_profit': min_profit,
-                    'min_profit_issue': min_profit_issue
+                    'min_profit_issue': min_profit_issue,
+                    'current_debt': current_debt  # Add current_debt
                 }
                 self.record_generated.emit(record)
                 
@@ -474,6 +473,7 @@ class BettingWorker(QThread):
     success_signal = pyqtSignal(str, str)   # 成功信号(期号, 消息)
     error_signal = pyqtSignal(str)          # 错误信号(错误消息)
     balance_low_signal = pyqtSignal()       # 余额不足信号
+    log_signal = pyqtSignal(str)            # 日志信号
     
     def __init__(self, token, cookie, period, my_numbers, unit_bet):
         super().__init__()
@@ -514,7 +514,9 @@ class BettingWorker(QThread):
                 "Cookie": self.cookie
             }
             
-            print(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
+            # 发送日志信号到UI
+            self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
+            
             response = requests.post(url, json=payload, headers=headers, timeout=10)
             
             if response.status_code == 200:
@@ -1478,118 +1480,127 @@ class Canada28Simulator(QMainWindow):
 
     # === 浏览器相关功能 ===
     def create_stats_panel(self):
-        """创建统计面板 (紧凑版: 双列布局)"""
-        """创建统计面板 (紧凑版: 垂直布局+行内水平布局，避免Grid导致过宽)"""
+        """创建统计面板 (紧凑版: 充分利用横向空间)"""
         self.stats_panel_group = QGroupBox("统计信息")
-        # 改用 VBox，每行一个 HBox
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(4)
+        main_layout.setSpacing(6)
         main_layout.setContentsMargins(10, 10, 10, 10)
         
-        # --- 第一行: 当前投入 | 单码价格 ---
+        # --- 第一行: 资金概况 (整合 投入/单价/流水/盈亏) ---
         h1 = QHBoxLayout()
+        # 左侧: 投入信息
         h1.addWidget(QLabel("当前投入:"))
         self.lbl_current_input = QLabel("0.00元")
         self.lbl_current_input.setStyleSheet("color: blue; font-weight: bold;")
         h1.addWidget(self.lbl_current_input)
-        
-        line1 = QFrame()
-        line1.setFrameShape(QFrame.VLine)
-        line1.setFrameShadow(QFrame.Sunken)
-        h1.addWidget(line1)
-        
-        h1.addWidget(QLabel("单码价格:"))
+        h1.addSpacing(10)
+        h1.addWidget(QLabel("| 单价:"))
         self.lbl_unit_price = QLabel("0.00元")
         h1.addWidget(self.lbl_unit_price)
-        h1.addStretch() # 靠左对齐，右侧留空
-        main_layout.addLayout(h1)
         
-        # --- 第二行: 总流水 | 累计盈亏 ---
-        h2 = QHBoxLayout()
-        h2.addWidget(QLabel("总流水:"))
+        h1.addStretch() # 中间弹簧
+        
+        # 右侧: 账户信息
+        h1.addWidget(QLabel("总流水:"))
         self.lbl_total_turnover = QLabel("0.00元")
         self.lbl_total_turnover.setStyleSheet("color: #666;")
-        h2.addWidget(self.lbl_total_turnover)
-        
-        line2 = QFrame()
-        line2.setFrameShape(QFrame.VLine)
-        line2.setFrameShadow(QFrame.Sunken)
-        h2.addWidget(line2)
-        
-        h2.addWidget(QLabel("累计盈亏:"))
+        h1.addWidget(self.lbl_total_turnover)
+        h1.addSpacing(10)
+        h1.addWidget(QLabel("| 累计盈亏:"))
         self.lbl_accumulated_profit = QLabel("+0.00元")
         self.lbl_accumulated_profit.setStyleSheet("color: green; font-size: 14px; font-weight: bold;")
-        h2.addWidget(self.lbl_accumulated_profit)
-        h2.addStretch()
-        main_layout.addLayout(h2)
+        h1.addWidget(self.lbl_accumulated_profit)
+        main_layout.addLayout(h1)
         
-        # --- 第三行: 综合战绩 ---
-        h_stats = QHBoxLayout()
+        # --- 第二行: 胜率与号码池 ---
+        h2 = QHBoxLayout()
+        # 左侧: 基础胜率
         self.lbl_total_rounds = QLabel("总:0")
-        h_stats.addWidget(self.lbl_total_rounds)
-        h_stats.addSpacing(10)
-        
+        h2.addWidget(self.lbl_total_rounds)
+        h2.addSpacing(5)
         self.lbl_win_counts = QLabel("中:0")
         self.lbl_win_counts.setStyleSheet("color: green;")
-        h_stats.addWidget(self.lbl_win_counts)
-        h_stats.addSpacing(10)
-        
+        h2.addWidget(self.lbl_win_counts)
+        h2.addSpacing(5)
         self.lbl_loss_counts = QLabel("未:0")
         self.lbl_loss_counts.setStyleSheet("color: red;")
-        h_stats.addWidget(self.lbl_loss_counts)
-        h_stats.addSpacing(10)
-        
+        h2.addWidget(self.lbl_loss_counts)
+        h2.addSpacing(5)
         self.lbl_win_rate_new = QLabel("胜率:0.0%")
         self.lbl_win_rate_new.setStyleSheet("font-weight: bold;")
-        h_stats.addWidget(self.lbl_win_rate_new)
-        h_stats.addStretch()
-        main_layout.addLayout(h_stats)
+        h2.addWidget(self.lbl_win_rate_new)
         
-        # --- 第四行: 实时胜率 (号码池) ---
-        h_ref_rate = QHBoxLayout()
-        h_ref_rate.addWidget(QLabel("号码池起始:"))
+        h2.addStretch()
+        
+        # 右侧: 号码池区间
+        h2.addWidget(QLabel("号码池起始:"))
         self.spin_ref_start_period = QSpinBox()
         self.spin_ref_start_period.setRange(1, 99999999)
         self.spin_ref_start_period.setValue(3380000)
         self.spin_ref_start_period.setFixedWidth(85)
         self.spin_ref_start_period.editingFinished.connect(self.calculate_ref_win_rate_static)
-        h_ref_rate.addWidget(self.spin_ref_start_period)
-        
-        h_ref_rate.addSpacing(5)
+        h2.addWidget(self.spin_ref_start_period)
+        h2.addSpacing(5)
         self.lbl_ref_win_rate_dynamic = QLabel("区间胜率: 0.00%")
         self.lbl_ref_win_rate_dynamic.setStyleSheet("color: blue; font-weight: bold;")
-        h_ref_rate.addWidget(self.lbl_ref_win_rate_dynamic)
-        h_ref_rate.addStretch()
-        main_layout.addLayout(h_ref_rate)
+        h2.addWidget(self.lbl_ref_win_rate_dynamic)
+        main_layout.addLayout(h2)
         
-        # --- 第五行: 胜率止盈设置 ---
-        h_ref_stop = QHBoxLayout()
+        # --- 第三行: 历史极值 ---
+        h3 = QHBoxLayout()
+        h3.addWidget(QLabel("最高投入:"))
+        self.lbl_max_bet = QLabel("0")
+        self.lbl_max_bet.setStyleSheet("color: black; font-weight: bold;")
+        h3.addWidget(self.lbl_max_bet)
+        h3.addSpacing(15)
+        
+        h3.addWidget(QLabel("最高盈利:"))
+        self.lbl_max_profit = QLabel("0")
+        self.lbl_max_profit.setStyleSheet("color: green; font-weight: bold;")
+        h3.addWidget(self.lbl_max_profit)
+        h3.addSpacing(15)
+        
+        h3.addWidget(QLabel("最大亏损:"))
+        self.lbl_min_profit = QLabel("0")
+        self.lbl_min_profit.setStyleSheet("color: red; font-weight: bold;")
+        h3.addWidget(self.lbl_min_profit)
+        h3.addStretch()
+        main_layout.addLayout(h3)
+
+        # --- 第四行: 策略监控 (对冲/欠款/止盈) ---
+        h4 = QHBoxLayout()
+        # 对冲
+        h4.addWidget(QLabel("待对冲:"))
+        self.lbl_hedge_periods = QLabel("0期")
+        self.lbl_hedge_periods.setStyleSheet("color: orange; font-weight: bold;")
+        h4.addWidget(self.lbl_hedge_periods)
+        h4.addWidget(QLabel("(连赢递减)"))
+        
+        h4.addSpacing(15)
+        h4.addWidget(QLabel("|"))
+        h4.addSpacing(15)
+        
+        # 欠款
+        h4.addWidget(QLabel("当前欠款:"))
+        self.lbl_debt = QLabel("0.00")
+        self.lbl_debt.setStyleSheet("color: red; font-weight: bold;")
+        h4.addWidget(self.lbl_debt)
+        
+        h4.addStretch()
+        
+        # 止盈设置
         self.chk_ref_stop_enable = QCheckBox("胜率止盈:")
         self.chk_ref_stop_enable.setToolTip("当'号码池区间胜率'达到设定值时自动停止")
-        h_ref_stop.addWidget(self.chk_ref_stop_enable)
-        
-        h_ref_stop.addWidget(QLabel(">="))
+        h4.addWidget(self.chk_ref_stop_enable)
+        h4.addWidget(QLabel(">="))
         self.spin_ref_stop_target = QDoubleSpinBox()
         self.spin_ref_stop_target.setRange(1.0, 100.0)
         self.spin_ref_stop_target.setValue(60.00)
         self.spin_ref_stop_target.setSingleStep(0.1)
         self.spin_ref_stop_target.setSuffix("%")
-        h_ref_stop.addWidget(self.spin_ref_stop_target)
-        h_ref_stop.addStretch()
-        main_layout.addLayout(h_ref_stop)
+        h4.addWidget(self.spin_ref_stop_target)
         
-        # --- 第六行: 待对冲 ---
-        h_hedge = QHBoxLayout()
-        h_hedge.addWidget(QLabel("待对冲期数:"))
-        self.lbl_hedge_periods = QLabel("0期")
-        self.lbl_hedge_periods.setStyleSheet("color: orange; font-weight: bold;")
-        h_hedge.addWidget(self.lbl_hedge_periods)
-        
-        lbl_hint = QLabel("(需连赢此数量才开始递减)")
-        lbl_hint.setStyleSheet("color: gray; font-size: 10px;")
-        h_hedge.addWidget(lbl_hint)
-        h_hedge.addStretch()
-        main_layout.addLayout(h_hedge)
+        main_layout.addLayout(h4)
         
         group = self.stats_panel_group
         group.setLayout(main_layout)
@@ -1644,10 +1655,31 @@ class Canada28Simulator(QMainWindow):
         
         last_bet_amount = 0.0
         
+        # 合并真实投注和模拟投注记录
+        all_results = {}
+        if hasattr(self, 'bet_results'):
+            all_results.update(self.bet_results)
+        # if hasattr(self, 'real_bet_results'):
+        #     # 简单合并，优先使用 real_bet_results
+        #     all_results.update(self.real_bet_results)
+            
+        if not all_results:
+            # 如果没有数据，清零显示
+            self.lbl_accumulated_profit.setText("0.00元")
+            self.lbl_total_turnover.setText("0.00元")
+            self.lbl_hedge_periods.setText("0期")
+            self.lbl_total_rounds.setText("总:0")
+            self.lbl_win_counts.setText("中:0")
+            self.lbl_loss_counts.setText("未:0")
+            self.lbl_win_rate_new.setText("胜率:0.0%")
+            self.lbl_current_input.setText("0.00元")
+            self.lbl_unit_price.setText("0.00元")
+            return
+
         # 遍历统计
-        sorted_periods = sorted(self.bet_results.keys())
+        sorted_periods = sorted(all_results.keys())
         for period in sorted_periods:
-            res = self.bet_results[period]
+            res = all_results[period]
             # 只统计已结算
             if res.get('finished', False) or res.get('profit') is not None:
                 total_rounds += 1
@@ -1908,6 +1940,12 @@ class Canada28Simulator(QMainWindow):
             print("✅ 历史数据同步完成")
             # 刷新表格显示
             self.update_history_table()
+            
+            # 【修复】自动运行时，同步完成后触发新开奖处理（算账+下期下单）
+            if self.is_running:
+                latest_local = self.data_manager.get_local_latest()
+                if latest_local:
+                     self.process_new_draw(latest_local)
         else:
             print("⚠️ 历史数据同步失败（可能网络问题）")
     def toggle_browser(self):
@@ -2412,9 +2450,8 @@ class Canada28Simulator(QMainWindow):
             return
             
         # 防止同一期重复下单/弹窗
-        if self.last_bet_period == period:
+        if hasattr(self, 'last_bet_period') and self.last_bet_period == period:
             return
-        self.last_bet_period = period
         
         total_money = len(self.my_numbers) * unit_bet
         
@@ -2427,7 +2464,6 @@ class Canada28Simulator(QMainWindow):
                 # 检查是否是首次确认
                 if not hasattr(self, 'first_bet_confirmed') or not self.first_bet_confirmed:
                     need_confirm = True
-                    self.first_bet_confirmed = True  # 标记已确认
             else:
                 # 每次都需要确认
                 need_confirm = True
@@ -2451,6 +2487,13 @@ class Canada28Simulator(QMainWindow):
                     self.is_running = False
                     self.update_start_button_text()
                 return
+            else:
+                # 用户确认了，如果是首次确认模式，标记为已确认
+                if self.chk_first_confirm_only.isChecked():
+                     self.first_bet_confirmed = True
+
+        # === 只有确认下单后，才标记该期已处理 ===
+        self.last_bet_period = period
 
         # 使用异步Worker发送请求（避免阻塞UI）
         self.log_run(f"🚀 准备下单: 期号={period}, 总额={total_money}")
@@ -2459,13 +2502,23 @@ class Canada28Simulator(QMainWindow):
         self.betting_worker.success_signal.connect(self.on_betting_success)
         self.betting_worker.error_signal.connect(self.on_betting_error)
         self.betting_worker.balance_low_signal.connect(self.on_betting_balance_low)
+        self.betting_worker.log_signal.connect(self.log_run)
         self.betting_worker.start()
     
     def on_betting_success(self, period, msg):
         """下注成功回调"""
         total_money = len(self.my_numbers) * self.spin_unit_bet.value()
         self.log_run(f"✅ 下单成功: {msg}")
+        
+        # 显示当前已知的历史总盈亏 (给用户反馈)
+        current_profit_text = self.lbl_real_profit_header.text()
+        if current_profit_text != "--":
+            self.log_run(f"💰 当前账户历史总盈亏: {current_profit_text} (新订单待结算)")
+
         self.statusBar().showMessage(f"✅ 第{period}期下单成功! 总额: {total_money}", 5000)
+        
+        # 下单成功后，立即同步一次账单，以便在表格中显示"未结算"的新订单
+        QTimer.singleShot(1000, self.fetch_real_account_history)
     
     def on_betting_error(self, error_msg):
         """下注错误回调"""
@@ -2490,6 +2543,10 @@ class Canada28Simulator(QMainWindow):
         self.btn_sync_profit.setEnabled(False)
         self.btn_sync_profit.setText("同步中...")
         
+        # 确保使用最新的认证信息
+        if hasattr(self.data_manager, 'cookie') and self.data_manager.cookie != self.cookie:
+             self.data_manager.set_auth(self.token, self.cookie)
+
         # 启动异步线程
         self.account_sync_worker = AccountSyncWorker(self.token, self.cookie)
         self.account_sync_worker.progress_signal.connect(self.log_run)
@@ -2550,6 +2607,10 @@ class Canada28Simulator(QMainWindow):
     
     def calculate_historical_extremes(self):
         """从历史记录计算极值统计(单次极值,非累计)"""
+        # 如果处于回测视图模式，停止更新 (保持回测数据显示)
+        if getattr(self, 'viewing_backtest_mode', False):
+            return
+
         # 初始化极值变量
         self.max_bet_value = 0
         self.max_bet_period = ""
@@ -2565,7 +2626,15 @@ class Canada28Simulator(QMainWindow):
             all_records.update(self.bet_results)
         
         if hasattr(self, 'real_bet_results'):
-            all_records.update(self.real_bet_results)
+            # 智能合并: 优先信任真实账单，但如果真实账单盈亏为0(可能未结算)而本地有非零记录，则保留本地
+            for period, r_data in self.real_bet_results.items():
+                if period in all_records:
+                    local_profit = all_records[period].get('profit', 0)
+                    remote_profit = r_data.get('profit', 0)
+                    # 如果远程是0且本地非0，说明可能API延迟未结算，保留本地计算结果
+                    if remote_profit == 0 and local_profit != 0:
+                        continue
+                all_records[period] = r_data
         
         if not all_records:
             return
@@ -2679,60 +2748,12 @@ class Canada28Simulator(QMainWindow):
             self.log_run(f"🏁 开始运行，设定回本底注为: {self.base_bet_memory}")
             self.update_start_button_text()
             
-            # === 立即检查是否需要下单 (针对当前期) ===
-            if self.chk_real_bet.isChecked():
-                if not self.my_numbers:
-                    QMessageBox.warning(self, "警告", "开启了真实投注但未导入号码！\n请先导入号码再开始。")
-                    self.is_running = False
-                    self.btn_start.setChecked(False)
-                    self.update_start_button_text()
-                    return
-
-                # 获取当前数据
-                realtime_data = self.data_manager.get_realtime_data()
-                if realtime_data:
-                    n_period = realtime_data.get('n_period', {})
-                    period_status = n_period.get('period_status', -1)
-                    current_period = n_period.get('period_no')
-                    
-                    # 根据JS逻辑: 1: 距离封盘 (即当前正在开盘，可以下单)
-                    if period_status == 1 and current_period:
-                        self.log_run(f"🚀 启动即时下单检查: 第 {current_period} 期")
-                        # 立即尝试下单 (使用当前设定金额)
-                        unit_bet = self.spin_unit_bet.value()
-                        self.place_real_bet(str(current_period), unit_bet)
-                    else:
-                        status_desc = {0: "未开盘", 1: "开盘中", 2: "开奖中"}.get(period_status, str(period_status))
-                        self.log_run(f"ℹ️ 未触发即时下单: 当前状态为【{status_desc}】，期号={current_period}")
-                else:
-                    self.log_run("⚠️ 未获取到实时数据，无法判断是否下单")
-            else:
-                # === 模拟模式启动逻辑 ===
-                if not self.my_numbers:
-                    QMessageBox.warning(self, "警告", "未导入号码！\n请先导入号码再开始模拟。")
-                    self.is_running = False
-                    self.btn_start.setChecked(False)
-                    self.update_start_button_text()
-                    return
-                
-                # 获取当前数据
-                realtime_data = self.data_manager.get_realtime_data()
-                if realtime_data:
-                    n_period = realtime_data.get('n_period', {})
-                    period_status = n_period.get('period_status', -1)
-                    current_period = n_period.get('period_no')
-                    
-                    if period_status == 1 and current_period:
-                        # 模拟即时下单
-                        unit_bet = self.spin_unit_bet.value()
-                        total_money = len(self.my_numbers) * unit_bet
-                        self.log_run(f"🎮 启动模拟: 第 {current_period} 期")
-                        self.log_run(f"🎮 [模拟下单] 期号: {current_period} | 号码数: {len(self.my_numbers)} | 单注: {unit_bet:.2f} | 总额: {total_money:.2f}")
-                    else:
-                        status_desc = {0: "未开盘", 1: "开盘中", 2: "开奖中"}.get(period_status, str(period_status))
-                        self.log_run(f"ℹ️ 启动模拟: 当前状态为【{status_desc}】，期号={current_period}，等待下期开奖")
-                else:
-                    self.log_run("⚠️ 未获取到实时数据，等待下期开奖")
+            # === 移除立即检查，统一由 polling loop 处理 (避免重复弹窗) ===
+            # 无论实盘还是模拟，启动后都会在下一次数据刷新时（几秒内）自动检测并下单
+            self.log_run("⏳ 已启动，等待数据同步后自动下单...")
+            
+            # 手动触发一次刷新，减少等待时间
+            QTimer.singleShot(100, self.refresh_data)
         else:
             self.is_running = False
             self.update_start_button_text()
@@ -2778,26 +2799,15 @@ class Canada28Simulator(QMainWindow):
         n_period = getattr(self, '_last_n_period', {})
         period_status = n_period.get('period_status', 0)
         
-        # 封盘优化：灵活轮询策略，避免死等 50s 导致错过开奖
-        if period_status == 2 and self.closed_start_time:
-            elapsed = current_time - self.closed_start_time
-            if elapsed < 35.0:
-                # 0-35秒：完全静默，不请求
-                if int(elapsed) % 10 == 0 and int(elapsed) != getattr(self, '_last_wait_log', -1):
-                    print(f"⏱️ 封盘静默中... 已等待 {int(elapsed)}s (预计 35s 后开始初步探测)")
-                    self._last_wait_log = int(elapsed)
-                return
-            elif elapsed < 50.0:
-                # 35-50秒：初步探测，每3秒请求一次
-                refresh_interval = 3.0
-                if (current_time - self._last_refresh_time) < refresh_interval:
-                    return
-                if int(elapsed) != getattr(self, '_last_wait_log', -1):
-                    print(f"⏱️ 封盘探测中... 已等待 {int(elapsed)}s (每3s探测一次)")
-                    self._last_wait_log = int(elapsed)
-            else:
-                # 50秒后：高频轮询，每2秒请求一次
-                refresh_interval = 2.0
+        # 封盘优化：改为每秒同步，确保第一时间获取开奖结果
+        if period_status == 2:
+            refresh_interval = 1.0
+            if self.closed_start_time:
+                 # 打印简单的日志
+                 elapsed = current_time - self.closed_start_time
+                 if int(elapsed) % 5 == 0 and int(elapsed) != getattr(self, '_last_wait_log', -1):
+                     # print(f"⏱️ 封盘等待... 已等待 {int(elapsed)}s (每1s同步)")
+                     self._last_wait_log = int(elapsed)
         else:
             # 正常开盘状态：每5秒请求一次
             refresh_interval = 5.0
@@ -2837,6 +2847,11 @@ class Canada28Simulator(QMainWindow):
     
     def on_realtime_data_success(self, realtime_data):
         """实时数据获取成功回调"""
+        # 只要成功获取数据，就说明已登录
+        if "未登录" in self.lbl_login_status.text() or "异常" in self.lbl_login_status.text():
+            self.lbl_login_status.setText("已登录")
+            self.lbl_login_status.setStyleSheet("color: green; font-weight: bold;")
+            
         try:
             # 更新余额
             user_data = realtime_data.get('user', {})
@@ -2958,6 +2973,60 @@ class Canada28Simulator(QMainWindow):
                         if self.is_running:
                             self.process_new_draw(latest_local)
                         self.update_history_table()
+        
+            # === 自动投注检查 (Polling) ===
+            # 移除了 process_new_draw 中的立即下单，改为在此处轮询检查
+            # 改为基于时间判断开盘状态 (因为 period_status 可能被硬编码为1)
+            # 只有在 运行中 + 倒计时未结束(Open) + 未对当前期下单 时才触发
+            if self.is_running:
+                n_period = realtime_data.get('n_period', {})
+                current_period = n_period.get('period_no')
+                
+                # 计算是否处于开盘状态 (剩余时间 > 0)
+                is_market_open = False
+                finish_at = n_period.get('finish_at')
+                server_at = realtime_data.get('server_at')
+                
+                if finish_at:
+                    if server_at:
+                        # 有服务器时间，用服务器时间比较
+                        diff = float(finish_at) - float(server_at)
+                        if diff > 0:
+                            is_market_open = True
+                    else:
+                        # 降级到本地时间
+                        diff = float(finish_at) - time.time()
+                        if diff > 0:
+                            is_market_open = True
+                
+                # Debug log (Temporary)
+                # if self.is_running:
+                #      print(f"🔍 Auto-Bet Debug: Period={current_period}, Diff={diff if 'diff' in locals() else 'N/A':.2f}, Open={is_market_open}, LastBet={getattr(self, 'last_bet_period', None)}")
+
+                # 特殊处理: 如果API还是返回了 status=0 (未开盘) 或 2(开奖中)，也视为关盘
+                # 虽然 data_manager 硬编码了1，但如果有真实数据覆盖，这里多判断一下无害
+                remote_status = n_period.get('period_status', 1) 
+                if remote_status != 1:
+                    is_market_open = False
+                
+                if is_market_open and current_period:
+                    # 检查是否已对该期下注
+                    # 注意: last_bet_period 需要是字符串比较
+                    if str(current_period) != getattr(self, 'last_bet_period', None):
+                        unit_bet = self.spin_unit_bet.value()
+                        
+                        if self.chk_real_bet.isChecked():
+                            self.place_real_bet(str(current_period), unit_bet)
+                        else:
+                            # === 模拟投注逻辑 ===
+                            # 模拟模式直接标记为已投，无需网络请求
+                            try:
+                                total_money = len(self.my_numbers) * unit_bet
+                                self.log_run(f"🎮 [模拟下单] 期号: {current_period} | 号码数: {len(self.my_numbers)} | 单注: {unit_bet:.2f} | 总额: {total_money:.2f}")
+                                self.last_bet_period = str(current_period)
+                            except Exception as e:
+                                self.log_run(f"❌ 模拟下单出错: {e}")
+            
         finally:
             # 重置刷新标志
             self.is_refreshing_data = False
@@ -3094,7 +3163,31 @@ class Canada28Simulator(QMainWindow):
         # 准备UI
         # self.btn_backtest.setEnabled(False) -> 改为由Stop逻辑控制
         self.btn_backtest.setText("⏹ 停止回测")
+        self.viewing_backtest_mode = True  # 标记进入回测视图模式
         self.btn_backtest.setStyleSheet("background-color: #f44336; color: white;") # 红色 Stop 样式
+        
+        # 保存当前状态快照 (以便停止后完全恢复)
+        self.snapshot_debt = self.current_debt
+        self.snapshot_unit_bet = self.spin_unit_bet.value()
+        
+        # 保存UI统计快照
+        self.snapshot_ui_stats = {
+            'input': self.lbl_current_input.text(),
+            'unit_price': self.lbl_unit_price.text(),
+            'turnover': self.lbl_total_turnover.text(),
+            'accum_profit': self.lbl_accumulated_profit.text(),
+            'accum_profit_style': self.lbl_accumulated_profit.styleSheet(),
+            'rounds': self.lbl_total_rounds.text(),
+            'wins': self.lbl_win_counts.text(),
+            'losses': self.lbl_loss_counts.text(),
+            'win_rate': self.lbl_win_rate_new.text(),
+            'hedge': self.lbl_hedge_periods.text(),
+            'ref_win_rate': self.lbl_ref_win_rate_dynamic.text(),
+            'max_bet': self.lbl_max_bet.text(),
+            'max_profit': self.lbl_max_profit.text(),
+            'min_profit': self.lbl_min_profit.text()
+        }
+        
         # 同步图表页面的按钮
         if hasattr(self, 'btn_chart_start'):
             self.btn_chart_start.setText("⏹ 停止回测")
@@ -3169,6 +3262,10 @@ class Canada28Simulator(QMainWindow):
 
     def on_backtest_record(self, record):
         """处理回测实时记录"""
+        # 如果已经退出回测视图，忽略后续的信号 (防竞争条件)
+        if not getattr(self, 'viewing_backtest_mode', False):
+            return
+
         # 0. 存储记录
         self.backtest_records.append(record)
         
@@ -3197,6 +3294,14 @@ class Canada28Simulator(QMainWindow):
         # 3. 更新统计面板 (新UI)
         self.lbl_current_input.setText(f"{record['bet']:.2f}元")
         self.lbl_unit_price.setText(f"{record['unit_bet']:.2f}元")
+
+        # 更新历史极值 (回测中实时更新)
+        if hasattr(self, 'lbl_max_bet'):
+             self.lbl_max_bet.setText(f"{record['max_bet']:.2f} (第{record['max_bet_issue']}期)")
+        if hasattr(self, 'lbl_max_profit'):
+             self.lbl_max_profit.setText(f"{record['max_profit']:.2f} (第{record['max_profit_issue']}期)")
+        if hasattr(self, 'lbl_min_profit'):
+             self.lbl_min_profit.setText(f"{record['min_profit']:.2f} (第{record['min_profit_issue']}期)")
     
         # 3.1 更新参考区间胜率 (Real-Time Ref Stats)
         if hasattr(self, 'ref_history_rounds'):
@@ -3250,18 +3355,27 @@ class Canada28Simulator(QMainWindow):
         self.backtest_running_turnover += record['bet']
         self.lbl_total_turnover.setText(f"{self.backtest_running_turnover:.2f}元")
         
-        # 待对冲 (估算)
+        # 待对冲 & 当前欠款
+        current_debt = record.get('current_debt', 0.0)
+        if hasattr(self, 'lbl_debt'):
+            self.lbl_debt.setText(f"{current_debt:.2f}")
+        
         hedge_periods = 0
-        if total_profit < 0:
-            debt = abs(total_profit)
-            current_bet = record['bet']
-            unit_price = record['unit_bet']
-            payout = self.spin_payout.value() # 使用当前赔率设定
-            one_win_profit = (unit_price * payout) - current_bet
+        if current_debt > 0:
+            # 估算剩余对冲期数
+            current_unit_bet = record['unit_bet']
+            payout = self.spin_payout.value() 
+            
+            # 假设下一把赢了能赚多少: 
+            # 这里的 unit_bet 是单注金额，如果是多注，则总投入是 unit_bet * len(my_numbers)
+            total_bet_now = len(self.my_numbers) * current_unit_bet
+            one_win_profit = (current_unit_bet * payout) - total_bet_now
+            
             if one_win_profit > 0:
-                hedge_periods = int(debt / one_win_profit) + 1
+                hedge_periods = int(current_debt / one_win_profit) + 1
             else:
                 hedge_periods = 999
+                
         self.lbl_hedge_periods.setText(f"{hedge_periods}期")
         
         # 4. 更新图表
@@ -3356,27 +3470,57 @@ class Canada28Simulator(QMainWindow):
 
     def restore_realtime_view(self):
         """恢复实时视图"""
-        # 1. 恢复表格
+        # 退出回测视图模式
+        self.viewing_backtest_mode = False
+        
+        # 恢复回测前的状态快照 (如果存在)
+        if hasattr(self, 'snapshot_debt'):
+            self.current_debt = self.snapshot_debt
+        if hasattr(self, 'snapshot_unit_bet'):
+            self.spin_unit_bet.setValue(self.snapshot_unit_bet)
+            
+        # 恢复UI统计快照
+        if hasattr(self, 'snapshot_ui_stats'):
+            s = self.snapshot_ui_stats
+            self.lbl_current_input.setText(s.get('input', '0.00元'))
+            self.lbl_unit_price.setText(s.get('unit_price', '0.00元'))
+            self.lbl_total_turnover.setText(s.get('turnover', '0.00元'))
+            
+            self.lbl_accumulated_profit.setText(s.get('accum_profit', '0.00元'))
+            self.lbl_accumulated_profit.setStyleSheet(s.get('accum_profit_style', ''))
+            
+            self.lbl_total_rounds.setText(s.get('rounds', '总:0'))
+            self.lbl_win_counts.setText(s.get('wins', '中:0'))
+            self.lbl_loss_counts.setText(s.get('losses', '未:0'))
+            self.lbl_win_rate_new.setText(s.get('win_rate', '胜率:0.0%'))
+            
+            self.lbl_hedge_periods.setText(s.get('hedge', '0期'))
+            self.lbl_ref_win_rate_dynamic.setText(s.get('ref_win_rate', '区间胜率: 0.00%'))
+            
+            # 恢复极值显示
+            self.lbl_max_bet.setText(s.get('max_bet', '0'))
+            self.lbl_max_profit.setText(s.get('max_profit', '0'))
+            self.lbl_min_profit.setText(s.get('min_profit', '0'))
+        
+        # 1. 恢复表格 (这可能会重新计算一次 update_stats_values，但前面的setText是硬恢复，update_history_table里的 update_stats_values 会基于当前数据再刷一次)
+        # 如果 self.bet_results 没变，update_stats_values 算出来的应该和快照一致。
+        # 这里为了保险，update_history_table 会刷新表格内容，极值等。
         self.update_history_table()
         
         # 2. 恢复图表
         self.update_chart()
         
-        # 实时更新号码统计（新增功能）
-        self.update_number_stats_display()
-        
-        # 3. 恢复极值统计 (重新计算而不是重置)
-        self.calculate_historical_extremes()
-        
-        # 4. 禁用按钮
-        self.btn_export_backtest.setEnabled(False)
-        self.btn_restore_view.setEnabled(False)
-        
-        # 5. 清理累计盈亏显示
-        if hasattr(self, 'lbl_total_profit'):
-            self.lbl_total_profit.setText("累计盈亏: --")
-        if hasattr(self, 'lbl_today_profit'):
-            self.lbl_today_profit.setText("今日盈亏: --")
+        # 3. 恢复极值统计 (如果想要完全恢复快照，可以注释掉这句，但通常重新计算更准确)
+        # 考虑到回测并不会污染 bet_results，重新计算是安全的
+        # self.calculate_historical_extremes()
+
+        # 恢复当前欠款显示
+        if hasattr(self, 'lbl_debt'):
+            self.lbl_debt.setText(f"{self.current_debt:.2f}")
+            if self.current_debt > 0:
+                self.lbl_debt.setStyleSheet("color: red; font-weight: bold;")
+            else:
+                self.lbl_debt.setStyleSheet("color: green; font-weight: bold;")
         
         # 4. 禁用按钮
         self.btn_export_backtest.setEnabled(False)
@@ -3430,6 +3574,10 @@ class Canada28Simulator(QMainWindow):
 
     def update_chart(self):
         """更新图表 (实时模式)"""
+        # 如果处于回测视图模式，停止更新 (保持回测图表显示)
+        if getattr(self, 'viewing_backtest_mode', False):
+            return
+
         if not self.canvas:
             return
             
@@ -3809,6 +3957,10 @@ class Canada28Simulator(QMainWindow):
             
         # === 核心投注逻辑 ===
         
+        # 如果处于回测视图模式且不是实盘，暂停后台模拟 (避免污染状态)
+        if getattr(self, 'viewing_backtest_mode', False) and not self.chk_real_bet.isChecked():
+            return
+
         # 1. 获取当前设置参数
         unit_bet = self.spin_unit_bet.value()
         payout_rate = self.spin_payout.value()
@@ -3860,15 +4012,15 @@ class Canada28Simulator(QMainWindow):
             self.lbl_max_bet.setText(f"{total_bet:.2f} (第{period}期)")
         
         # 最高/最低盈利
-        if new_total_profit > self.max_profit_value:
-            self.max_profit_value = new_total_profit
+        if profit > self.max_profit_value:
+            self.max_profit_value = profit
             self.max_profit_period = period
-            self.lbl_max_profit.setText(f"{new_total_profit:.2f} (第{period}期)")
+            self.lbl_max_profit.setText(f"{profit:.2f} (第{period}期)")
         
-        if new_total_profit < self.min_profit_value:
-            self.min_profit_value = new_total_profit
+        if profit < self.min_profit_value:
+            self.min_profit_value = profit
             self.min_profit_period = period
-            self.lbl_min_profit.setText(f"{new_total_profit:.2f} (第{period}期)")
+            self.lbl_min_profit.setText(f"{profit:.2f} (第{period}期)")
         
         # 6. 动态注码调整 (金额回本策略)
         if is_win:
@@ -3941,34 +4093,20 @@ class Canada28Simulator(QMainWindow):
             self.spin_unit_bet.setValue(new_unit_bet)
             
         # 更新欠款状态显示
-        self.lbl_debt.setText(f"{self.current_debt:.2f}")
-        if self.current_debt > 0:
-            self.lbl_debt.setStyleSheet("color: red; font-weight: bold;")
-        else:
-            self.lbl_debt.setStyleSheet("color: green; font-weight: bold;")
+        if not getattr(self, 'viewing_backtest_mode', False):
+            self.lbl_debt.setText(f"{self.current_debt:.2f}")
+            if self.current_debt > 0:
+                self.lbl_debt.setStyleSheet("color: red; font-weight: bold;")
+            else:
+                self.lbl_debt.setStyleSheet("color: green; font-weight: bold;")
             
-        # === 真实投注逻辑 (无论输赢都执行) ===
-        if self.chk_real_bet.isChecked():
-            # 计算下期期号 (当前期号 + 1)
-            try:
-                next_period = str(int(period) + 1)
-                # 调用下单 (使用更新后的金额)
-                current_unit_bet = self.spin_unit_bet.value()
-                self.place_real_bet(next_period, current_unit_bet)
-            except:
-                self.log_run("❌ 无法计算下期期号，跳过下单")
-        else:
-            # === 模拟投注逻辑 ===
-            try:
-                next_period = str(int(period) + 1)
-                current_unit_bet = self.spin_unit_bet.value()
-                total_money = len(self.my_numbers) * current_unit_bet
-                self.log_run(f"🎮 [模拟下单] 期号: {next_period} | 号码数: {len(self.my_numbers)} | 单注: {current_unit_bet:.2f} | 总额: {total_money:.2f}")
-            except:
-                self.log_run("❌ 无法计算下期期号，跳过模拟下单")
+        # (原先的下单逻辑已移动到 on_realtime_data_success 中进行轮询检查)
+        # 这里只负责计算策略状态 (赔率、底注、欠款等)
+        # 当 market status 变为 1 时，on_realtime_data_success 会自动触发 place_real_bet
             
         # 8. 更新图表
-        self.update_chart()
+        if not getattr(self, 'viewing_backtest_mode', False):
+            self.update_chart()
         
         # 9. 如果是真实投注模式,同步账单更新真实盈亏
         if self.chk_real_bet.isChecked() and self.is_running:
@@ -3976,6 +4114,10 @@ class Canada28Simulator(QMainWindow):
         
     def update_history_table(self):
         """更新历史记录表格"""
+        # 如果处于回测视图模式，停止更新表格 (保持回测结果显示)
+        if getattr(self, 'viewing_backtest_mode', False):
+            return
+
         data_list = self.data_manager.read_all_local_data()
         
         # 顺便更新冷门导出界面的提示信息

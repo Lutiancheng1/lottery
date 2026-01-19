@@ -119,13 +119,19 @@ if __name__ == "__main__":
     print("\n✨ 全部完成!")
     
     # 自动压缩为ZIP方便分发
+    import datetime
+    today = datetime.datetime.now().strftime("%Y%m%d")
+    
     print("\n📦 正在生成客户分发包 (不含注册机)...")
-    zip_name = "Canada28Simulator_Client"
+    # 修改包名: Canada28_f5.ab311c.com_Client_v20260120
+    base_name = f"Canada28_f5.ab311c.com_Client_v{today}"
+    zip_name = base_name
+    
     try:
         dist_dir = "dist"
         if os.path.exists(dist_dir):
             # 创建一个完全独立的临时目录 (在根目录，不在dist内)
-            package_dir = "Client_Package_Temp"
+            package_dir = f"{base_name}_Temp"
             if os.path.exists(package_dir):
                 shutil.rmtree(package_dir)
             os.makedirs(package_dir)
@@ -157,8 +163,11 @@ if __name__ == "__main__":
             
             # --- 额外：单独打包注册机 ---
             print("\n📦 正在生成注册机独立包...")
-            keygen_zip = "KeyGen_Admin_Tool"
-            keygen_temp = "KeyGen_Temp" # 同样移到根目录
+            
+            admin_base_name = f"Canada28_f5.ab311c.com_Admin_KeyGen_v{today}"
+            keygen_zip = admin_base_name
+            keygen_temp = f"{admin_base_name}_Temp" # 同样移到根目录
+            
             if os.path.exists(keygen_temp):
                 shutil.rmtree(keygen_temp)
             os.makedirs(keygen_temp)
