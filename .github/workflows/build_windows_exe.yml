@@ -86,4 +86,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Canada28Simulator_F5_Client_Package
-          path: f5.ab311c.com/Canada28Simulator_Client.zip
+          path: f5.ab311c.com/*.zip
