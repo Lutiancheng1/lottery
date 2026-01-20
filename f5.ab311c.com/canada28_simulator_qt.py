@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLineEdit, QTextEdit, QMessageBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
                              QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton,
-                             QSizePolicy, QGridLayout, QDateEdit, QDialog, QTextBrowser)
+                             QSizePolicy, QGridLayout, QDateEdit, QDialog, QTextBrowser, QAction)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType, QDate
 from PyQt5.QtGui import QFont, QColor
@@ -100,16 +100,60 @@ class DataSyncWorker(QThread):
             self.finished_signal.emit(False)
 
 
+class DataRepairWorker(QThread):
+    """数据修复工作线程"""
+    progress_signal = pyqtSignal(str)   # 进度提示
+    finished_signal = pyqtSignal(str)   # 完成信号
+    
+    def __init__(self, data_manager, missing_periods):
+        super().__init__()
+        self.data_manager = data_manager
+        self.missing_periods = missing_periods
+        self.is_running = True
+        
+    def stop(self):
+        self.is_running = False
+        
+    def run(self):
+        total = len(self.missing_periods)
+        repaired_count = 0
+        
+        for i, p_no in enumerate(self.missing_periods):
+            if not self.is_running:
+                break
+                
+            self.progress_signal.emit(f"正在修复第 {p_no} 期 ({i+1}/{total})...")
+            
+            # 使用新添加的 fetch_single_period
+            # 注意:需要在 DataManager 中实现该方法
+            try:
+                data = self.data_manager.fetch_single_period(p_no)
+                if data:
+                    # 写入本地
+                    self.data_manager.append_to_local_file([data])
+                    repaired_count += 1
+                else:
+                    self.progress_signal.emit(f"⚠️ 第 {p_no} 期数据获取失败")
+            except Exception as e:
+                self.progress_signal.emit(f"❌ 异常: {e}")
+                
+            # 简单限速，避免被封
+            time.sleep(1.0) # 1秒间隔
+            
+        self.finished_signal.emit(f"修复完成！成功修复 {repaired_count} / {total} 条记录。")
+
+
 class AccountSyncWorker(QThread):
     """账单同步工作线程（避免主线程阻塞）"""
     progress_signal = pyqtSignal(str)  # 进度提示信号
     finished_signal = pyqtSignal(float, dict)  # 完成信号(总盈亏, 账单数据)
     error_signal = pyqtSignal(str)  # 错误信号
     
-    def __init__(self, token, cookie):
+    def __init__(self, token, cookie, limit=50):
         super().__init__()
         self.token = token
         self.cookie = cookie
+        self.limit = limit
         
     def run(self):
         try:
@@ -118,7 +162,7 @@ class AccountSyncWorker(QThread):
             
             total_profit = 0.0
             page = 1
-            limit = 50
+            limit = self.limit
             real_bet_results = {}
             
             # 第一阶段：获取最近的历史报表 (member/report/history)
@@ -131,7 +175,8 @@ class AccountSyncWorker(QThread):
                 "startTime": start_date.strftime("%Y-%m-%d"),
                 "endTime": end_date.strftime("%Y-%m-%d"),
                 "current": 1,
-                "size": 1000 # 获取足够多的记录
+                "current": 1,
+                "size": limit # Use limit from settings
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -180,10 +225,10 @@ class AccountSyncWorker(QThread):
             else:
                  self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
                 
-            # 第二阶段：获取最近20期的详细明细
+            # 第二阶段：获取最近N期的详细明细
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
             
-            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:20]
+            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:limit]
             for idx, p_no in enumerate(recent_periods):
                 try:
                     self.progress_signal.emit(f"🔍 获取第{p_no}期明细 ({idx+1}/{len(recent_periods)})")
@@ -524,7 +569,7 @@ class BettingWorker(QThread):
                     if attempt == 0:
                         self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
                     else:
-                        self.log_signal.emit(f"🔄 网络波动，第 {attempt+1} 次重试下单...")
+                        self.log_signal.emit(f"<font color='#FF8C00'><b>🔄 网络波动，第 {attempt+1} 次重试下单...</b></font>")
                     
                     response = requests.post(url, json=payload, headers=headers, timeout=10)
                     
@@ -550,8 +595,8 @@ class BettingWorker(QThread):
                 except Exception as e:
                     # 捕获所有网络异常 (ConnectionError, Timeout等)
                     if attempt < max_retries - 1:
-                        self.log_signal.emit(f"⚠️ 下单异常: {str(e)}，1秒后重试...")
-                        time.sleep(1)
+                        self.log_signal.emit(f"<font color='#FF8C00'>⚠️ 下单异常: {str(e)}，3秒后重试...</font>")
+                        time.sleep(3)
                     else:
                         self.error_signal.emit(f"下单异常: {str(e)}")
                         
@@ -659,6 +704,9 @@ class Canada28Simulator(QMainWindow):
         # 主分割器 (左右布局)
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(self.main_splitter)
+        
+        # self.create_menu_bar() # 用户要求移到底部Tab中
+        
         
         # === 左侧：浏览器面板 ===
         self.browser_panel = QWidget()
@@ -893,6 +941,12 @@ class Canada28Simulator(QMainWindow):
         sync_group = QGroupBox("账单同步")
         sync_layout = QHBoxLayout()
         
+        sync_layout.addWidget(QLabel("同步限制:"))
+        self.combo_sync_limit = QComboBox()
+        self.combo_sync_limit.addItems(["25", "50", "100", "1000(全部)"])
+        self.combo_sync_limit.setCurrentIndex(0) # Default 25
+        sync_layout.addWidget(self.combo_sync_limit)
+        
         self.btn_sync_profit = QPushButton("同步真实盈亏")
         self.btn_sync_profit.clicked.connect(self.fetch_real_account_history)
         sync_layout.addWidget(self.btn_sync_profit)
@@ -1034,6 +1088,19 @@ class Canada28Simulator(QMainWindow):
         
         grp_stop.setLayout(layout_stop)
         settings_layout.addWidget(grp_stop)
+        
+        # === 数据维护 (新加) ===
+        grp_data = QGroupBox("数据维护")
+        layout_data = QHBoxLayout()
+        
+        btn_check_integrity = QPushButton("检查数据完整性")
+        btn_check_integrity.setToolTip("检查本地数据是否有缺失，并尝试自动修复")
+        btn_check_integrity.clicked.connect(self.check_data_integrity)
+        layout_data.addWidget(btn_check_integrity)
+        
+        layout_data.addStretch()
+        grp_data.setLayout(layout_data)
+        settings_layout.addWidget(grp_data)
         
         settings_splitter.addWidget(settings_widget)
         
@@ -2573,8 +2640,18 @@ class Canada28Simulator(QMainWindow):
         if hasattr(self.data_manager, 'cookie') and self.data_manager.cookie != self.cookie:
              self.data_manager.set_auth(self.token, self.cookie)
 
+        # 获取用户设置的同步数量
+        limit_text = self.combo_sync_limit.currentText()
+        if "全部" in limit_text:
+            limit = 1000
+        else:
+            try:
+                limit = int(limit_text)
+            except:
+                limit = 50
+
         # 启动异步线程
-        self.account_sync_worker = AccountSyncWorker(self.token, self.cookie)
+        self.account_sync_worker = AccountSyncWorker(self.token, self.cookie, limit)
         self.account_sync_worker.progress_signal.connect(self.log_run)
         self.account_sync_worker.finished_signal.connect(self.on_account_sync_finished)
         self.account_sync_worker.error_signal.connect(self.on_account_sync_error)
@@ -4352,6 +4429,74 @@ class Canada28Simulator(QMainWindow):
         except Exception as e:
             self.log_run(f"❌ 查询详情异常: {e}")
             QMessageBox.critical(self, "错误", f"查询详情时发生异常: {e}")
+
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()
+        
+        # 工具菜单
+        tools_menu = menubar.addMenu('工具')
+        
+        check_integrity_act = QAction('检查数据完整性', self)
+        check_integrity_act.setStatusTip('检查本地数据是否有缺失，并尝试自动修复')
+        check_integrity_act.triggered.connect(self.check_data_integrity)
+        tools_menu.addAction(check_integrity_act)
+
+    def check_data_integrity(self):
+        """检查数据完整性"""
+        self.log_run("🔍 正在检查数据完整性...")
+        try:
+            missing_periods = self.data_manager.find_missing_periods()
+        except Exception as e:
+             QMessageBox.critical(self, "错误", f"检查失败: {e}")
+             return
+        
+        if not missing_periods:
+            QMessageBox.information(self, "完整性检查", "✅ 本地数据完整，未发现缺失期号。")
+            self.log_run("✅ 数据完整性检查通过，本地数据完整。")
+            return
+            
+        # 限制显示数量，防止弹窗太大
+        display_missing = missing_periods[:50]
+        msg = f"⚠️ 发现 {len(missing_periods)} 个断号缺失:\n\n"
+        msg += ", ".join(map(str, display_missing))
+        if len(missing_periods) > 50:
+            msg += f"\n... 以及其他 {len(missing_periods)-50} 个"
+            
+        msg += "\n\n是否尝试自动修复这些缺失数据？\n(程序将从服务器自动下载缺失记录，可能需要一些时间)"
+        
+        reply = QMessageBox.question(self, "发现缺失数据", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        
+        if reply == QMessageBox.Yes:
+            self.start_data_repair(missing_periods)
+
+    def start_data_repair(self, missing_periods):
+        """开始数据修复"""
+        if hasattr(self, 'repair_worker') and self.repair_worker.isRunning():
+            QMessageBox.warning(self, "提示", "修复任务正在进行中...")
+            return
+            
+        self.log_run(f"🔧 开始修复 {len(missing_periods)} 条缺失数据...")
+        
+        # 禁用相关按钮防止冲突
+        if hasattr(self, 'btn_sync_profit'): self.btn_sync_profit.setEnabled(False)
+        
+        self.repair_worker = DataRepairWorker(self.data_manager, missing_periods)
+        self.repair_worker.progress_signal.connect(self.log_run)
+        self.repair_worker.finished_signal.connect(self.on_repair_finished)
+        self.repair_worker.start()
+        
+    def on_repair_finished(self, msg):
+        """修复完成回调"""
+        self.log_run(msg)
+        QMessageBox.information(self, "修复完成", msg)
+        
+        # 恢复按钮
+        if hasattr(self, 'btn_sync_profit'): self.btn_sync_profit.setEnabled(True)
+        
+        # 刷新表格
+        self.update_history_table()
+        self.update_chart()
 
 # === 全局配置 (放在 import 之后, App 初始化之前) ===
 # 根据运行环境智能配置浏览器引擎参数

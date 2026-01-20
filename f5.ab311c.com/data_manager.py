@@ -379,3 +379,85 @@ class CanadaDataManager:
         else:
             print("✅ 本地数据已是最新")
             return True
+
+    def find_missing_periods(self) -> List[int]:
+        """查找本地数据库中缺失的期号 (检查断号)"""
+        all_records = self.db.get_all_records()
+        if not all_records:
+            return []
+            
+        # extract period numbers (index 0 is period_no)
+        periods = [int(r[0]) for r in all_records]
+        periods.sort()
+        
+        missing = []
+        if len(periods) < 2:
+            return missing
+            
+        # Check gaps
+        for i in range(len(periods) - 1):
+            curr = periods[i]
+            next_p = periods[i+1]
+            if next_p - curr > 1:
+                # Found gap (e.g. 100, 102 -> missing 101)
+                # 限制gap太大时不要全部列出 (比如几万期)，这里假设用于修复最近缺失
+                # 但为了完整性，还是列出所有。用户界面决定修不修。
+                for p in range(curr + 1, next_p):
+                    missing.append(p)
+                    
+        return missing
+
+    def fetch_single_period(self, period_no) -> Optional[Dict]:
+        """获取指定单个期号的数据"""
+        if not self.cookie:
+            return None
+            
+        try:
+            url = f"{self.base_url}/member/settingStage/page"
+            payload = {
+                "current": 1,
+                "size": 1000, # 增加到1000，防止API忽略stage参数导致找不到较早的期号
+                "stage": str(period_no) 
+            }
+            response = self.session.post(url, json=payload, headers=self.headers, timeout=10)
+            res_json = response.json()
+            
+            if res_json.get('code') == 200:
+                rows = res_json.get('data', {}).get('row', [])
+                
+                # 寻找精确匹配的期号
+                for row in rows:
+                    if str(row.get('stageNo')) == str(period_no):
+                        # 解析数据 (复用 fetch_remote_history 的解析逻辑)
+                        open_num = row.get('openNumber', '')
+                        if not open_num: 
+                            continue
+                            
+                        b, s, g, result_sum = 0, 0, 0, 0
+                        if len(open_num) >= 3:
+                            try:
+                                b = int(open_num[0])
+                                s = int(open_num[1])
+                                g = int(open_num[2])
+                                result_sum = b + s + g
+                            except:
+                                pass
+                        
+                        return {
+                            'overt_at': row.get('openTime'),
+                            'period_no': row.get('stageNo'),
+                            'b': b,
+                            's': s,
+                            'g': g,
+                            'number_overt': open_num,
+                            'result_sum': result_sum,
+                            'is_big_msg': '大' if result_sum >= 14 else '小',
+                            'is_odd_msg': '单' if result_sum % 2 != 0 else '双',
+                            'lhh': '', 
+                            'fan': '',
+                            'fan_sum': ''
+                        }
+            return None
+        except Exception as e:
+            print(f"❌ 获取第 {period_no} 期失败: {e}")
+            return None
