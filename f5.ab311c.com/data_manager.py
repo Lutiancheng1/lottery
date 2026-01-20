@@ -130,47 +130,37 @@ class CanadaDataManager:
                 data_list.append(parsed)
         return data_list
 
-    def parse_data_line(self, line: str) -> Optional[Dict]:
-        """解析一行数据为字典"""
-        try:
-            parts = line.strip().split('\t')
-            if len(parts) < 7:
-                return None
-                
-            return {
-                'overt_at': parts[0],
-                'period_no': parts[1],
-                'b': parts[2],
-                's': parts[3],
-                'g': parts[4],
-                'number_overt': parts[5],
-                'result_sum': parts[6],
-                # 后面的字段可选，防止旧数据报错
-                'is_big_msg': parts[7] if len(parts) > 7 else '',
-                'is_odd_msg': parts[8] if len(parts) > 8 else '',
-                'lhh': parts[9] if len(parts) > 9 else '',
-                'fan': parts[10] if len(parts) > 10 else '',
-                'fan_sum': parts[11] if len(parts) > 11 else ''
-            }
-        except Exception:
-            return None
+    def get_lhh(self, n1, n3):
+        if n1 > n3: return '龙'
+        if n1 < n3: return '虎'
+        return '和'
+
+    def get_fanshu(self, r_sum):
+        """
+        根据用户原始记录推导的番数逻辑: sum % 4 (余数为0时记为4)
+        """
+        val = r_sum % 4
+        return 4 if val == 0 else val
 
     def format_data_line(self, data: Dict) -> str:
-        """将远程数据格式化为本地文件格式"""
+        """将远程数据格式化为本地文件格式 (严格匹配 12 列原始格式)"""
         overt_at = data.get('overt_at', '')
         period_no = data.get('period_no', '')
-        b = data.get('b', '')
-        s = data.get('s', '')
-        g = data.get('g', '')
-        number_overt = data.get('number_overt', '')
-        result_sum = data.get('result_sum', '')
-        is_big_msg = data.get('is_big_msg', '')
-        is_odd_msg = data.get('is_odd_msg', '')
-        lhh = data.get('lhh', '')
-        fan = data.get('fan', '')
-        fan_sum = data.get('fan_sum', '')
+        b = data.get('b', 0)
+        s = data.get('s', 0)
+        g = data.get('g', 0)
+        result_sum = data.get('result_sum', 0)
         
-        line = f"{overt_at}\t{period_no}\t{b}\t{s}\t{g}\t{number_overt}\t{result_sum}\t{is_big_msg}\t{is_odd_msg}\t{lhh}\t{fan}\t{fan_sum}\n"
+        # 移除开奖号码中的逗号
+        num_str = str(data.get('number_overt', '')).replace(',', '')
+        
+        big_small = '大' if int(result_sum) >= 14 else '小'
+        odd_even = '单' if int(result_sum) % 2 != 0 else '双'
+        lhh = self.get_lhh(int(b), int(g))
+        f_val = self.get_fanshu(int(result_sum))
+        
+        # 格式: 1.时间 2.期号 3.佰 4.拾 5.个 6.开奖号码 7.总和 8.大小 9.单双 10.龙虎和 11.番 12.番数值
+        line = f"{overt_at}\t{period_no}\t{b}\t{s}\t{g}\t{num_str}\t{result_sum}\t{big_small}\t{odd_even}\t{lhh}\t{f_val}番\t{f_val}\n"
         return line
 
     def get_realtime_data(self) -> Optional[Dict]:
