@@ -1588,8 +1588,8 @@ class Canada28Simulator(QMainWindow):
                 p = int(d['period_no'])
                 if p >= start_period:
                     code = str(d.get('number_overt', '')).replace(',', '')
-                    # 修正: 只有当开奖号码不为空时，才计入总期数和中奖数
-                    if code and code.strip():
+                    # 彻底修复: 只有当开奖号码不为空且不是占位符时，才计入统计
+                    if code and code.strip() and code != '--':
                         target_rounds += 1
                         if code in self.my_numbers:
                             target_wins += 1
@@ -1687,6 +1687,10 @@ class Canada28Simulator(QMainWindow):
             self.lbl_win_rate_new.setText(f"胜率:{rate:.1f}%")
         else:
             self.lbl_win_rate_new.setText("胜率:0.0%")
+            
+        # 8. 自动同步更新区间胜率 (号码池统计)
+        if hasattr(self, 'calculate_ref_win_rate_static'):
+            self.calculate_ref_win_rate_static()
 
     def create_history_table(self):
         """创建历史记录表格"""
