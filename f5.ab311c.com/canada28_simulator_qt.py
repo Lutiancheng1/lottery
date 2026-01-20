@@ -3305,11 +3305,12 @@ class Canada28Simulator(QMainWindow):
     
         # 3.1 更新参考区间胜率 (Real-Time Ref Stats)
         if hasattr(self, 'ref_history_rounds'):
-            self.ref_current_rounds += 1
+            # 修正: 先计算总数，再递增，或者直接在计算时包含当前期
+            # 逻辑: 历史基数 + 当前回测已产生的记录数
+            total_ref_r = self.ref_history_rounds + len(self.backtest_records)
+            
             if record['is_win']:
                 self.ref_current_wins += 1
-                
-            total_ref_r = self.ref_history_rounds + self.ref_current_rounds
             total_ref_w = self.ref_history_wins + self.ref_current_wins
             
             ref_rate = (total_ref_w / total_ref_r * 100) if total_ref_r > 0 else 0.0
