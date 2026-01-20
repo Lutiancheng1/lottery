@@ -487,6 +487,7 @@ class BettingWorker(QThread):
         try:
             import requests
             import uuid
+            import time
             
             # 构造 betNoList
             betNoList = []
@@ -496,6 +497,7 @@ class BettingWorker(QThread):
             total_money = len(self.my_numbers) * self.unit_bet
             
             # 生成 ock (UUID with hyphens replaced by 'f')
+            # <IMPORTANT> 保持 OCK 不变，防止网络超时重试时导致服务器重复扣款 (如果服务器支持幂等性)
             ock = str(uuid.uuid4()).replace('-', 'f')
             
             # 发送请求
@@ -514,29 +516,47 @@ class BettingWorker(QThread):
                 "Cookie": self.cookie
             }
             
-            # 发送日志信号到UI
-            self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
+            max_retries = 3
             
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                res_json = response.json()
-                # 新站成功返回的是订单列表或 successCode
-                success_code = res_json.get("successCode", 0)
+            for attempt in range(max_retries):
+                try:
+                    # 发送日志信号到UI
+                    if attempt == 0:
+                        self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
+                    else:
+                        self.log_signal.emit(f"🔄 网络波动，第 {attempt+1} 次重试下单...")
+                    
+                    response = requests.post(url, json=payload, headers=headers, timeout=10)
+                    
+                    if response.status_code == 200:
+                        res_json = response.json()
+                        # 新站成功返回的是订单列表或 successCode
+                        success_code = res_json.get("successCode", 0)
+                        
+                        if success_code > 0:
+                            msg = f"下单成功 ({success_code}注)"
+                            self.success_signal.emit(self.period, msg)
+                            return # 成功，直接结束
+                        else:
+                            fail_code = res_json.get("failCode", 0)
+                            error_msg = res_json.get('msg', f'下单失败 (错误码:{fail_code})')
+                            # 业务逻辑错误(如余额不足)通常不需重试，直接报错
+                            self.error_signal.emit(f"API返回错误: {error_msg}")
+                            return
+                    else:
+                        # HTTP错误也视为网络问题抛出异常进入Retry
+                        raise Exception(f"HTTP {response.status_code}")
                 
-                if success_code > 0:
-                    msg = f"下单成功 ({success_code}注)"
-                    self.success_signal.emit(self.period, msg)
-                else:
-                    fail_code = res_json.get("failCode", 0)
-                    error_msg = res_json.get('msg', f'下单失败 (错误码:{fail_code})')
-                    # 假设 failCode 为某个值时表示余额不足，这里暂不明确，先按通用错误处理
-                    self.error_signal.emit(f"API返回错误: {error_msg}")
-            else:
-                self.error_signal.emit(f"HTTP {response.status_code}")
-                
+                except Exception as e:
+                    # 捕获所有网络异常 (ConnectionError, Timeout等)
+                    if attempt < max_retries - 1:
+                        self.log_signal.emit(f"⚠️ 下单异常: {str(e)}，1秒后重试...")
+                        time.sleep(1)
+                    else:
+                        self.error_signal.emit(f"下单异常: {str(e)}")
+                        
         except Exception as e:
-            self.error_signal.emit(f"下单异常: {str(e)}")
+            self.error_signal.emit(f"下单未知异常: {str(e)}")
 
 
 class RealtimeDataWorker(QThread):
