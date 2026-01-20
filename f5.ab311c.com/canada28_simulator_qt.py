@@ -520,13 +520,14 @@ class BettingWorker(QThread):
     balance_low_signal = pyqtSignal()       # 余额不足信号
     log_signal = pyqtSignal(str)            # 日志信号
     
-    def __init__(self, token, cookie, period, my_numbers, unit_bet):
+    def __init__(self, token, cookie, period, my_numbers, unit_bet, deadline_timestamp=None):
         super().__init__()
         self.token = token
         self.cookie = cookie
         self.period = period
         self.my_numbers = my_numbers
         self.unit_bet = unit_bet
+        self.deadline = deadline_timestamp
         
     def run(self):
         try:
@@ -541,11 +542,9 @@ class BettingWorker(QThread):
             
             total_money = len(self.my_numbers) * self.unit_bet
             
-            # 生成 ock (UUID with hyphens replaced by 'f')
-            # <IMPORTANT> 保持 OCK 不变，防止网络超时重试时导致服务器重复扣款 (如果服务器支持幂等性)
+            # 生成 ock (保持不变，防止重复扣款)
             ock = str(uuid.uuid4()).replace('-', 'f')
             
-            # 发送请求
             url = "http://f5.ab311c.com/member/bet/doOrder"
             payload = {
                 "betNoList": betNoList,
@@ -561,45 +560,65 @@ class BettingWorker(QThread):
                 "Cookie": self.cookie
             }
             
-            max_retries = 3
-            
-            for attempt in range(max_retries):
-                try:
-                    # 发送日志信号到UI
-                    if attempt == 0:
-                        self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
-                    else:
-                        self.log_signal.emit(f"<font color='#FF8C00'><b>🔄 网络波动，第 {attempt+1} 次重试下单...</b></font>")
-                    
-                    response = requests.post(url, json=payload, headers=headers, timeout=10)
-                    
-                    if response.status_code == 200:
-                        res_json = response.json()
-                        # 新站成功返回的是订单列表或 successCode
-                        success_code = res_json.get("successCode", 0)
-                        
-                        if success_code > 0:
-                            msg = f"下单成功 ({success_code}注)"
-                            self.success_signal.emit(self.period, msg)
-                            return # 成功，直接结束
-                        else:
-                            fail_code = res_json.get("failCode", 0)
-                            error_msg = res_json.get('msg', f'下单失败 (错误码:{fail_code})')
-                            # 业务逻辑错误(如余额不足)通常不需重试，直接报错
-                            self.error_signal.emit(f"API返回错误: {error_msg}")
-                            return
-                    else:
-                        # HTTP错误也视为网络问题抛出异常进入Retry
-                        raise Exception(f"HTTP {response.status_code}")
+            # 智能重试循环
+            batch_count = 0
+            while True:
+                # 检查是否超时 (截止前5秒停止尝试)
+                if self.deadline and time.time() > (self.deadline - 5):
+                     self.error_signal.emit(f"已接近封盘时间，停止重试。")
+                     return
+
+                batch_count += 1
                 
-                except Exception as e:
-                    # 捕获所有网络异常 (ConnectionError, Timeout等)
-                    if attempt < max_retries - 1:
-                        self.log_signal.emit(f"<font color='#FF8C00'>⚠️ 下单异常: {str(e)}，3秒后重试...</font>")
-                        time.sleep(3)
-                    else:
-                        self.error_signal.emit(f"下单异常: {str(e)}")
+                # 每轮尝试3次
+                for attempt in range(3):
+                    try:
+                        # 日志
+                        if batch_count == 1 and attempt == 0:
+                            self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}")
+                        else:
+                            self.log_signal.emit(f"<font color='#FF8C00'><b>🔄 第{batch_count}轮-第{attempt+1}次重试...</b></font>")
                         
+                        # 增加超时时间
+                        response = requests.post(url, json=payload, headers=headers, timeout=15)
+                        
+                        if response.status_code == 200:
+                            res_json = response.json()
+                            success_code = res_json.get("successCode", 0)
+                            
+                            if success_code > 0:
+                                msg = f"下单成功 ({success_code}注)"
+                                self.success_signal.emit(self.period, msg)
+                                return 
+                            else:
+                                fail_code = res_json.get("failCode", 0)
+                                error_msg = res_json.get('msg', f'下单失败 ({fail_code})')
+                                # 某些错误(如余额不足)可能需要重试，但余额不足不需要
+                                if "余额不足" in error_msg:
+                                    self.error_signal.emit(f"API返回错误: {error_msg}")
+                                    return
+                                    
+                                # 其他API错误，记录并继续重试 (可能是服务器繁忙)
+                                self.log_signal.emit(f"<font color='red'>API拒绝: {error_msg}</font>")
+                                
+                        else:
+                             self.log_signal.emit(f"<font color='red'>HTTP {response.status_code}</font>")
+                             
+                    except Exception as e:
+                        self.log_signal.emit(f"<font color='#FF8C00'>连接异常: {str(e)}</font>")
+                    
+                    # 每次小尝试间隔3秒
+                    time.sleep(3)
+                    
+                    # 再次检查时间
+                    if self.deadline and time.time() > (self.deadline - 5):
+                         self.error_signal.emit(f"已接近封盘时间，停止重试。")
+                         return
+
+                # 一轮3次都失败，等待15秒
+                self.log_signal.emit(f"<font color='red'>⚠️ 本轮3次重试均失败，等待15秒后继续...</font>")
+                time.sleep(15)
+
         except Exception as e:
             self.error_signal.emit(f"下单未知异常: {str(e)}")
 
@@ -943,8 +962,8 @@ class Canada28Simulator(QMainWindow):
         
         sync_layout.addWidget(QLabel("同步限制:"))
         self.combo_sync_limit = QComboBox()
-        self.combo_sync_limit.addItems(["25", "50", "100", "1000(全部)"])
-        self.combo_sync_limit.setCurrentIndex(0) # Default 25
+        self.combo_sync_limit.addItems(["10", "25", "50", "100", "1000(全部)"])
+        self.combo_sync_limit.setCurrentIndex(0) # Default 10
         sync_layout.addWidget(self.combo_sync_limit)
         
         self.btn_sync_profit = QPushButton("同步真实盈亏")
@@ -2591,7 +2610,17 @@ class Canada28Simulator(QMainWindow):
         # 使用异步Worker发送请求（避免阻塞UI）
         self.log_run(f"🚀 准备下单: 期号={period}, 总额={total_money}")
         
-        self.betting_worker = BettingWorker(self.token, self.cookie, period, self.my_numbers, unit_bet)
+        # 计算截止时间 (用于智能重试)
+        bg_deadline = time.time() + 150 # 默认给予充足时间
+        if hasattr(self, 'countdown_target_monotonic'):
+             try:
+                 remaining = self.countdown_target_monotonic - time.monotonic()
+                 if remaining > 0:
+                     bg_deadline = time.time() + remaining
+             except:
+                 pass
+
+        self.betting_worker = BettingWorker(self.token, self.cookie, period, self.my_numbers, unit_bet, bg_deadline)
         self.betting_worker.success_signal.connect(self.on_betting_success)
         self.betting_worker.error_signal.connect(self.on_betting_error)
         self.betting_worker.balance_low_signal.connect(self.on_betting_balance_low)
@@ -2616,7 +2645,8 @@ class Canada28Simulator(QMainWindow):
     def on_betting_error(self, error_msg):
         """下注错误回调"""
         self.log_run(f"❌ 下单失败: {error_msg}")
-        QMessageBox.warning(self, "下单失败", error_msg)
+        # QMessageBox.warning(self, "下单失败", error_msg) # 移除弹窗，防止挂机时阻塞
+        self.statusBar().showMessage(f"❌ 下单失败: {error_msg}", 5000)
     
     def on_betting_balance_low(self):
         """余额不足回调"""
