@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLineEdit, QTextEdit, QMessageBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
                              QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton,
-                             QSizePolicy, QGridLayout, QDateEdit)
+                             QSizePolicy, QGridLayout, QDateEdit, QDialog, QTextBrowser)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType, QDate
 from PyQt5.QtGui import QFont, QColor
@@ -131,7 +131,7 @@ class AccountSyncWorker(QThread):
                 "startTime": start_date.strftime("%Y-%m-%d"),
                 "endTime": end_date.strftime("%Y-%m-%d"),
                 "current": 1,
-                "size": 100 # 获取足够多的记录
+                "size": 1000 # 获取足够多的记录
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -192,7 +192,7 @@ class AccountSyncWorker(QThread):
                         "stageNo": str(p_no),
                         "searchType": "amt",
                         "current": 1,
-                        "size": 50
+                        "size": 1000
                     }
                     # 增加超时时间到 15s
                     detail_res = requests.post(detail_url, json=detail_payload, headers=headers, timeout=15)
@@ -4255,7 +4255,7 @@ class Canada28Simulator(QMainWindow):
                 "stageNo": str(period_no),
                 "searchType": "amt",
                 "current": 1,
-                "size": 50
+                "size": 1000  # 增加到1000条以查全大额注单
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -4281,9 +4281,10 @@ class Canada28Simulator(QMainWindow):
                 return
                 
             # 构造详情文本
-            detail_text = f"<b>期号: {period_no}</b><br><br>"
-            detail_text += "<table border='1' cellpadding='5' style='border-collapse: collapse;'>"
-            detail_text += "<tr><th>号码</th><th>单注</th><th>赔率</th><th>投入</th><th>结果</th><th>时间</th></tr>"
+            detail_text = f"<h3>第 {period_no} 期下单详情</h3>"
+            detail_text += f"<p>共查询到 {len(orders)} 条记录</p>"
+            detail_text += "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse: collapse; width: 100%;'>"
+            detail_text += "<tr style='background-color: #f0f0f0;'><th>号码</th><th>单注</th><th>赔率</th><th>投入</th><th>结果</th><th>时间</th></tr>"
             
             total_bet = 0.0
             total_prize = 0.0
@@ -4295,21 +4296,38 @@ class Canada28Simulator(QMainWindow):
                 prize = o.get("bonusAmt", "0")
                 time_str = o.get("ordTime", "").split(" ")[1] if " " in o.get("ordTime", "") else o.get("ordTime", "")
                 
+                # 只有赢的时候 bonusAmt 才是中奖金额，如果不中 bonusAmt 是 0
+                
                 total_bet += float(unit)
                 total_prize += float(prize)
                 
-                detail_text += f"<tr><td>{num}</td><td>{unit}</td><td>{odds}</td><td>{unit}</td><td>{prize}</td><td>{time_str}</td></tr>"
+                color = "green" if float(prize) > 0 else "black"
+                detail_text += f"<tr><td>{num}</td><td>{unit}</td><td>{odds}</td><td>{unit}</td><td><font color='{color}'>{prize}</font></td><td>{time_str}</td></tr>"
             
             detail_text += "</table>"
-            detail_text += f"<br><b>总计投入: {total_bet:.2f}</b>"
-            detail_text += f"<br><b>总计中奖: {total_prize:.2f}</b>"
-            detail_text += f"<br><b>本期盈亏: <font color='{'red' if total_prize-total_bet > 0 else 'green'}'>{total_prize-total_bet:.2f}</font></b>"
+            detail_text += "<br><hr>"
+            detail_text += f"<p><b>总计投入: {total_bet:.2f}</b></p>"
+            detail_text += f"<p><b>总计中奖: {total_prize:.2f}</b></p>"
+            net_profit = total_prize - total_bet
+            color = "red" if net_profit > 0 else "green"
+            detail_text += f"<p><b>本期盈亏: <font color='{color}' size='4'>{net_profit:.2f}</font></b></p>"
             
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle(f"第 {period_no} 期下单详情")
-            msg_box.setTextFormat(Qt.RichText)
-            msg_box.setText(detail_text)
-            msg_box.exec_()
+            # 使用自定义对话框显示 (支持滚动)
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"第 {period_no} 期详情")
+            dialog.resize(600, 600)
+            
+            layout = QVBoxLayout(dialog)
+            
+            text_browser = QTextBrowser()
+            text_browser.setHtml(detail_text)
+            layout.addWidget(text_browser)
+            
+            btn_close = QPushButton("关闭")
+            btn_close.clicked.connect(dialog.accept)
+            layout.addWidget(btn_close)
+            
+            dialog.exec_()
             
         except Exception as e:
             self.log_run(f"❌ 查询详情异常: {e}")
