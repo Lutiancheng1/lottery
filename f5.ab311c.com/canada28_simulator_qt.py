@@ -1631,7 +1631,7 @@ class Canada28Simulator(QMainWindow):
         try:
             for d in data_list:
                 p = int(d['period_no'])
-                if p >= start_period:
+                if p > start_period:
                     code = str(d.get('number_overt', '')).replace(',', '')
                     # 彻底修复: 只有当开奖号码不为空且不是占位符时，才计入统计
                     if code and code.strip() and code != '--':
