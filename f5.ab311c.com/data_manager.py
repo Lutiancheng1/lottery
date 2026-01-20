@@ -130,6 +130,30 @@ class CanadaDataManager:
                 data_list.append(parsed)
         return data_list
 
+    def parse_data_line(self, line: str) -> Optional[Dict]:
+        """解析一行数据为字典 (适配最新的 12 列格式)"""
+        try:
+            parts = line.strip().split('\t')
+            if len(parts) < 7:
+                return None
+                
+            return {
+                'overt_at': parts[0],
+                'period_no': parts[1],
+                'b': parts[2],
+                's': parts[3],
+                'g': parts[4],
+                'number_overt': parts[5],
+                'result_sum': parts[6],
+                'is_big_msg': parts[7] if len(parts) > 7 else '',
+                'is_odd_msg': parts[8] if len(parts) > 8 else '',
+                'lhh': parts[9] if len(parts) > 9 else '',
+                'fan': parts[10] if len(parts) > 10 else '',
+                'fan_sum': parts[11] if len(parts) > 11 else ''
+            }
+        except Exception:
+            return None
+
     def get_lhh(self, n1, n3):
         if n1 > n3: return '龙'
         if n1 < n3: return '虎'
