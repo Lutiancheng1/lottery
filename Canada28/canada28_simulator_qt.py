@@ -1587,10 +1587,12 @@ class Canada28Simulator(QMainWindow):
             for d in data_list:
                 p = int(d['period_no'])
                 if p >= start_period:
-                    target_rounds += 1
-                    code = d['number_overt'].replace(',', '')
-                    if code in self.my_numbers:
-                        target_wins += 1
+                    code = str(d.get('number_overt', '')).replace(',', '')
+                    # 修正: 只有当开奖号码不为空时，才计入总期数和中奖数
+                    if code and code.strip():
+                        target_rounds += 1
+                        if code in self.my_numbers:
+                            target_wins += 1
             
             rate = (target_wins / target_rounds * 100) if target_rounds > 0 else 0.0
             self.lbl_ref_win_rate_dynamic.setText(f"区间胜率: {rate:.2f}% ({target_wins}/{target_rounds})")
