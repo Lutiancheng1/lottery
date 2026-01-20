@@ -37,6 +37,8 @@ desktop.ini
 
 # 忽略配置文件（包含敏感信息）
 simulator_config.json
+Canada28/config.json
+f5.ab311c.com/config.json
 
 # 保留数据文件夹但忽略具体数据（可选）
 # Canada_data/*.xlsx
