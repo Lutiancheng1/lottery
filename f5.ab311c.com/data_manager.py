@@ -407,57 +407,141 @@ class CanadaDataManager:
                     
         return missing
 
-    def fetch_single_period(self, period_no) -> Optional[Dict]:
-        """获取指定单个期号的数据"""
+    def fetch_daily_data(self, date_str) -> List[Dict]:
+        """获取指定日期的全部数据"""
         if not self.cookie:
-            return None
-            
+            return []
+        
         try:
             url = f"{self.base_url}/member/settingStage/page"
-            payload = {
-                "current": 1,
-                "size": 1000, # 增加到1000，防止API忽略stage参数导致找不到较早的期号
-                "stage": str(period_no) 
-            }
-            response = self.session.post(url, json=payload, headers=self.headers, timeout=10)
-            res_json = response.json()
+            # 每天288期，请求500足够涵盖全天
+            payload = {"current": 1, "size": 500, "stage": date_str}
+            resp = self.session.post(url, json=payload, headers=self.headers, timeout=10)
+            res_json = resp.json()
             
+            parsed_data = []
             if res_json.get('code') == 200:
                 rows = res_json.get('data', {}).get('row', [])
-                
-                # 寻找精确匹配的期号
                 for row in rows:
-                    if str(row.get('stageNo')) == str(period_no):
-                        # 解析数据 (复用 fetch_remote_history 的解析逻辑)
-                        open_num = row.get('openNumber', '')
-                        if not open_num: 
-                            continue
-                            
-                        b, s, g, result_sum = 0, 0, 0, 0
-                        if len(open_num) >= 3:
-                            try:
-                                b = int(open_num[0])
-                                s = int(open_num[1])
-                                g = int(open_num[2])
-                                result_sum = b + s + g
-                            except:
-                                pass
+                    open_num = row.get('openNumber', '')
+                    if not open_num: 
+                        continue
                         
-                        return {
-                            'overt_at': row.get('openTime'),
-                            'period_no': row.get('stageNo'),
-                            'b': b,
-                            's': s,
-                            'g': g,
-                            'number_overt': open_num,
-                            'result_sum': result_sum,
-                            'is_big_msg': '大' if result_sum >= 14 else '小',
-                            'is_odd_msg': '单' if result_sum % 2 != 0 else '双',
-                            'lhh': '', 
-                            'fan': '',
-                            'fan_sum': ''
-                        }
-            return None
+                    b, s, g, result_sum = 0, 0, 0, 0
+                    if len(open_num) >= 3:
+                        try:
+                            b, s, g = int(open_num[0]), int(open_num[1]), int(open_num[2])
+                            result_sum = b + s + g
+                        except: pass
+                    
+                    parsed_data.append({
+                        'overt_at': row.get('openTime'),
+                        'period_no': row.get('stageNo'),
+                        'b': b, 's': s, 'g': g,
+                        'number_overt': open_num,
+                        'result_sum': result_sum,
+                        'is_big_msg': '大' if result_sum >= 14 else '小',
+                        'is_odd_msg': '单' if result_sum % 2 != 0 else '双',
+                        'lhh': '', 'fan': '', 'fan_sum': ''
+                    })
+            return parsed_data
         except Exception as e:
-            print(f"❌ 获取第 {period_no} 期失败: {e}")
+            # print(f"❌ 获取日期 {date_str} 数据失败: {e}")
+            return []
+
+    def fetch_single_period(self, period_no) -> Optional[Dict]:
+        """获取指定单个期号的数据 (通过日期反推)"""
+        if not self.cookie:
+            return None
+        
+        try:
+            target_no = int(period_no)
+            url = f"{self.base_url}/member/settingStage/page"
+            
+            # 1. 获取最新一期作为参照 (只需一次，可以优化缓存，但为了健壮性每次查也可)
+            # 也可以使用 get_remote_latest 缓存
+            try:
+                # 尝试获取最新一期用于校准时间
+                init_payload = {"current": 1, "size": 1, "stage": ""}
+                init_resp = self.session.post(url, json=init_payload, headers=self.headers, timeout=5)
+                latest_rows = init_resp.json().get('data', {}).get('row', [])
+                if not latest_rows:
+                    return None
+                    
+                latest_row = latest_rows[0]
+                latest_no = int(latest_row.get('stageNo'))
+                latest_time_str = latest_row.get('openTime', '') # "2026-01-25 14:00:00"
+                
+                if not latest_time_str:
+                    return None
+
+                # 解析最新日期
+                from datetime import datetime, timedelta
+                try:
+                    latest_dt = datetime.strptime(latest_time_str, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    return None
+                
+                # 2. 计算目标日期 (每天288期)
+                diff_periods = latest_no - target_no
+                # 粗略计算天数
+                diff_days = diff_periods / 288.0
+                target_dt = latest_dt - timedelta(days=diff_days)
+                
+                # 构造搜索日期列表 (目标日期，以及前后一天，防止边界误差)
+                date_candidates = [
+                    target_dt, 
+                    target_dt - timedelta(days=1),
+                    target_dt + timedelta(days=1)
+                ]
+                
+                # 去重并格式化为 YYYYMMDD
+                checked_dates = set()
+                
+                for dt in date_candidates:
+                    date_str = dt.strftime("%Y%m%d")
+                    if date_str in checked_dates:
+                        continue
+                    checked_dates.add(date_str)
+                    
+                    # print(f"🔍 [调试] 在 {date_str} 中查找 {target_no}...")
+                    
+                    # 获取该日全部数据 (288期，请求500保险)
+                    payload = {"current": 1, "size": 500, "stage": date_str}
+                    resp = self.session.post(url, json=payload, headers=self.headers, timeout=10)
+                    res_json = resp.json()
+                    
+                    if res_json.get('code') == 200:
+                        rows = res_json.get('data', {}).get('row', [])
+                        for row in rows:
+                            if str(row.get('stageNo')) == str(target_no):
+                                # Found! Parse it.
+                                open_num = row.get('openNumber', '')
+                                if not open_num: continue
+                                
+                                b, s, g, result_sum = 0, 0, 0, 0
+                                if len(open_num) >= 3:
+                                    try:
+                                        b, s, g = int(open_num[0]), int(open_num[1]), int(open_num[2])
+                                        result_sum = b + s + g
+                                    except: pass
+                                
+                                return {
+                                    'overt_at': row.get('openTime'),
+                                    'period_no': row.get('stageNo'),
+                                    'b': b, 's': s, 'g': g,
+                                    'number_overt': open_num,
+                                    'result_sum': result_sum,
+                                    'is_big_msg': '大' if result_sum >= 14 else '小',
+                                    'is_odd_msg': '单' if result_sum % 2 != 0 else '双',
+                                    'lhh': '', 'fan': '', 'fan_sum': ''
+                                }
+            except Exception as e:
+                # print(f"⚠️ 查找期号 {period_no} 异常: {e}")
+                return None
+            
+            return None
+            
+        except Exception as e:
+            # print(f"❌ 获取第 {period_no} 期失败: {e}")
             return None

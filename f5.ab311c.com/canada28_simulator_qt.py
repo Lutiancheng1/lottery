@@ -115,32 +115,124 @@ class DataRepairWorker(QThread):
         self.is_running = False
         
     def run(self):
-        total = len(self.missing_periods)
-        repaired_count = 0
-        
-        for i, p_no in enumerate(self.missing_periods):
-            if not self.is_running:
-                break
-                
-            self.progress_signal.emit(f"正在修复第 {p_no} 期 ({i+1}/{total})...")
+        try:
+            total_missing = len(self.missing_periods)
+            if total_missing == 0:
+                self.finished_signal.emit("没有缺失数据需要修复。")
+                return
+
+            self.progress_signal.emit("正在分析缺失数据分布...")
             
-            # 使用新添加的 fetch_single_period
-            # 注意:需要在 DataManager 中实现该方法
+            # 1. 获取最新期号作为参照 (用于计算日期)
+            from datetime import datetime, timedelta
+            import time
+            import math
+            
+            latest_ref = None
             try:
-                data = self.data_manager.fetch_single_period(p_no)
-                if data:
-                    # 写入本地
-                    self.data_manager.append_to_local_file([data])
-                    repaired_count += 1
-                else:
-                    self.progress_signal.emit(f"⚠️ 第 {p_no} 期数据获取失败")
+                url = f"{self.data_manager.base_url}/member/settingStage/page"
+                payload = {"current": 1, "size": 1, "stage": ""}
+                resp = self.data_manager.session.post(url, json=payload, headers=self.data_manager.headers, timeout=5)
+                rows = resp.json().get('data', {}).get('row', [])
+                if rows:
+                    latest_row = rows[0]
+                    l_no = int(latest_row.get('stageNo'))
+                    l_time = latest_row.get('openTime', '')
+                    if l_time:
+                         l_dt = datetime.strptime(l_time, "%Y-%m-%d %H:%M:%S")
+                         latest_ref = (l_no, l_dt)
             except Exception as e:
-                self.progress_signal.emit(f"❌ 异常: {e}")
-                
-            # 简单限速，避免被封
-            time.sleep(1.0) # 1秒间隔
+                 self.finished_signal.emit(f"无法获取参照时间，修复终止: {e}")
+                 return
+
+            if not latest_ref:
+                self.finished_signal.emit("获取最新期号失败，无法进行批量修复。")
+                return
+
+            l_no, l_dt = latest_ref
             
-        self.finished_signal.emit(f"修复完成！成功修复 {repaired_count} / {total} 条记录。")
+            # 2. 对所有缺失期号进行日期归类
+            # 加拿大28通常是3.5分钟一期 (210秒)，一天约411期
+            PERIODS_PER_DAY = 24 * 60 * 60 / 210 # ~411.4
+            
+            date_map = {} # {'20260120': [3386695, 3386696...]}
+            
+            remaining_set = set(self.missing_periods)
+            
+            for p_no in self.missing_periods:
+                diff = l_no - p_no
+                days = diff / PERIODS_PER_DAY
+                target_dt = l_dt - timedelta(days=days)
+                date_str = target_dt.strftime("%Y%m%d")
+                
+                if date_str not in date_map:
+                    date_map[date_str] = []
+                date_map[date_str].append(p_no)
+            
+            # 3. 按日期排序
+            sorted_dates = sorted(date_map.keys())
+            
+            # 为了保险，增加相邻日期 (去重)
+            expanded_dates = []
+            seen_dates = set()
+            
+            for d_str in sorted_dates:
+                 try:
+                     d_dt = datetime.strptime(d_str, "%Y%m%d")
+                     # 前一天，当天，后一天
+                     candidates = [
+                         (d_dt - timedelta(days=1)).strftime("%Y%m%d"),
+                         d_str,
+                         (d_dt + timedelta(days=1)).strftime("%Y%m%d")
+                     ]
+                     for c in candidates:
+                         if c not in seen_dates:
+                             expanded_dates.append(c)
+                             seen_dates.add(c)
+                 except: pass
+            
+            repaired_count = 0
+            
+            # 4. 遍历日期拉取数据
+            total_dates = len(expanded_dates)
+            self.progress_signal.emit(f"计划扫描 {total_dates} 个日期节点...")
+            
+            for idx, date_str in enumerate(expanded_dates):
+                if not self.is_running: break
+                if not remaining_set: break
+                
+                self.progress_signal.emit(f"[{idx+1}/{total_dates}] 正在拉取 {date_str} 数据...")
+                
+                day_data = self.data_manager.fetch_daily_data(date_str)
+                if day_data:
+                    to_save = []
+                    # 检查拉取到的数据中有哪些是我们需要的
+                    for item in day_data:
+                        p = int(item['period_no'])
+                        if p in remaining_set:
+                            to_save.append(item)
+                            remaining_set.remove(p)
+                            repaired_count += 1
+                    
+                    if to_save:
+                        # 批量写入
+                        to_save.sort(key=lambda x: int(x['period_no']))
+                        self.data_manager.append_to_local_file(to_save)
+                        self.progress_signal.emit(f"✅ 日期 {date_str}: 修复了 {len(to_save)} 条数据")
+                    else:
+                        # self.progress_signal.emit(f"日期 {date_str}: 无需修复")
+                        pass
+                
+                time.sleep(1.0) # 避免速率限制
+
+            # 5. 检查结果
+            if not remaining_set:
+                self.finished_signal.emit(f"完美修复！共修复 {repaired_count} / {total_missing} 条记录。")
+            else:
+                self.finished_signal.emit(f"修复完成，但仍有 {len(remaining_set)} 条未能修复。\n成功修复: {repaired_count} 条。")
+
+        except Exception as e:
+            self.finished_signal.emit(f"❌ 修复过程出错: {e}")
 
 
 class AccountSyncWorker(QThread):
