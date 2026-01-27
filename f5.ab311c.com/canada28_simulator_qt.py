@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLineEdit, QTextEdit, QMessageBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
                              QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton,
-                             QSizePolicy, QGridLayout, QDateEdit)
+                             QSizePolicy, QGridLayout, QDateEdit, QDialog, QTextBrowser, QAction)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType, QDate
 from PyQt5.QtGui import QFont, QColor
@@ -100,16 +100,152 @@ class DataSyncWorker(QThread):
             self.finished_signal.emit(False)
 
 
+class DataRepairWorker(QThread):
+    """数据修复工作线程"""
+    progress_signal = pyqtSignal(str)   # 进度提示
+    finished_signal = pyqtSignal(str)   # 完成信号
+    
+    def __init__(self, data_manager, missing_periods):
+        super().__init__()
+        self.data_manager = data_manager
+        self.missing_periods = missing_periods
+        self.is_running = True
+        
+    def stop(self):
+        self.is_running = False
+        
+    def run(self):
+        try:
+            total_missing = len(self.missing_periods)
+            if total_missing == 0:
+                self.finished_signal.emit("没有缺失数据需要修复。")
+                return
+
+            self.progress_signal.emit("正在分析缺失数据分布...")
+            
+            # 1. 获取最新期号作为参照 (用于计算日期)
+            from datetime import datetime, timedelta
+            import time
+            import math
+            
+            latest_ref = None
+            try:
+                url = f"{self.data_manager.base_url}/member/settingStage/page"
+                payload = {"current": 1, "size": 1, "stage": ""}
+                resp = self.data_manager.session.post(url, json=payload, headers=self.data_manager.headers, timeout=5)
+                rows = resp.json().get('data', {}).get('row', [])
+                if rows:
+                    latest_row = rows[0]
+                    l_no = int(latest_row.get('stageNo'))
+                    l_time = latest_row.get('openTime', '')
+                    if l_time:
+                         l_dt = datetime.strptime(l_time, "%Y-%m-%d %H:%M:%S")
+                         latest_ref = (l_no, l_dt)
+            except Exception as e:
+                 self.finished_signal.emit(f"无法获取参照时间，修复终止: {e}")
+                 return
+
+            if not latest_ref:
+                self.finished_signal.emit("获取最新期号失败，无法进行批量修复。")
+                return
+
+            l_no, l_dt = latest_ref
+            
+            # 2. 对所有缺失期号进行日期归类
+            # 加拿大28通常是3.5分钟一期 (210秒)，一天约411期
+            PERIODS_PER_DAY = 24 * 60 * 60 / 210 # ~411.4
+            
+            date_map = {} # {'20260120': [3386695, 3386696...]}
+            
+            remaining_set = set(self.missing_periods)
+            
+            for p_no in self.missing_periods:
+                diff = l_no - p_no
+                days = diff / PERIODS_PER_DAY
+                target_dt = l_dt - timedelta(days=days)
+                date_str = target_dt.strftime("%Y%m%d")
+                
+                if date_str not in date_map:
+                    date_map[date_str] = []
+                date_map[date_str].append(p_no)
+            
+            # 3. 按日期排序
+            sorted_dates = sorted(date_map.keys())
+            
+            # 为了保险，增加相邻日期 (去重)
+            expanded_dates = []
+            seen_dates = set()
+            
+            for d_str in sorted_dates:
+                 try:
+                     d_dt = datetime.strptime(d_str, "%Y%m%d")
+                     # 前一天，当天，后一天
+                     candidates = [
+                         (d_dt - timedelta(days=1)).strftime("%Y%m%d"),
+                         d_str,
+                         (d_dt + timedelta(days=1)).strftime("%Y%m%d")
+                     ]
+                     for c in candidates:
+                         if c not in seen_dates:
+                             expanded_dates.append(c)
+                             seen_dates.add(c)
+                 except: pass
+            
+            repaired_count = 0
+            
+            # 4. 遍历日期拉取数据
+            total_dates = len(expanded_dates)
+            self.progress_signal.emit(f"计划扫描 {total_dates} 个日期节点...")
+            
+            for idx, date_str in enumerate(expanded_dates):
+                if not self.is_running: break
+                if not remaining_set: break
+                
+                self.progress_signal.emit(f"[{idx+1}/{total_dates}] 正在拉取 {date_str} 数据...")
+                
+                day_data = self.data_manager.fetch_daily_data(date_str)
+                if day_data:
+                    to_save = []
+                    # 检查拉取到的数据中有哪些是我们需要的
+                    for item in day_data:
+                        p = int(item['period_no'])
+                        if p in remaining_set:
+                            to_save.append(item)
+                            remaining_set.remove(p)
+                            repaired_count += 1
+                    
+                    if to_save:
+                        # 批量写入
+                        to_save.sort(key=lambda x: int(x['period_no']))
+                        self.data_manager.append_to_local_file(to_save)
+                        self.progress_signal.emit(f"✅ 日期 {date_str}: 修复了 {len(to_save)} 条数据")
+                    else:
+                        # self.progress_signal.emit(f"日期 {date_str}: 无需修复")
+                        pass
+                
+                time.sleep(1.0) # 避免速率限制
+
+            # 5. 检查结果
+            if not remaining_set:
+                self.finished_signal.emit(f"完美修复！共修复 {repaired_count} / {total_missing} 条记录。")
+            else:
+                self.finished_signal.emit(f"修复完成，但仍有 {len(remaining_set)} 条未能修复。\n成功修复: {repaired_count} 条。")
+
+        except Exception as e:
+            self.finished_signal.emit(f"❌ 修复过程出错: {e}")
+
+
 class AccountSyncWorker(QThread):
     """账单同步工作线程（避免主线程阻塞）"""
     progress_signal = pyqtSignal(str)  # 进度提示信号
     finished_signal = pyqtSignal(float, dict)  # 完成信号(总盈亏, 账单数据)
     error_signal = pyqtSignal(str)  # 错误信号
     
-    def __init__(self, token, cookie):
+    def __init__(self, token, cookie, limit=50):
         super().__init__()
         self.token = token
         self.cookie = cookie
+        self.limit = limit
         
     def run(self):
         try:
@@ -118,7 +254,7 @@ class AccountSyncWorker(QThread):
             
             total_profit = 0.0
             page = 1
-            limit = 50
+            limit = self.limit
             real_bet_results = {}
             
             # 第一阶段：获取最近的历史报表 (member/report/history)
@@ -131,7 +267,8 @@ class AccountSyncWorker(QThread):
                 "startTime": start_date.strftime("%Y-%m-%d"),
                 "endTime": end_date.strftime("%Y-%m-%d"),
                 "current": 1,
-                "size": 100 # 获取足够多的记录
+                "current": 1,
+                "size": limit # Use limit from settings
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -180,10 +317,10 @@ class AccountSyncWorker(QThread):
             else:
                  self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
                 
-            # 第二阶段：获取最近20期的详细明细
+            # 第二阶段：获取最近N期的详细明细
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
             
-            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:20]
+            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:limit]
             for idx, p_no in enumerate(recent_periods):
                 try:
                     self.progress_signal.emit(f"🔍 获取第{p_no}期明细 ({idx+1}/{len(recent_periods)})")
@@ -192,7 +329,7 @@ class AccountSyncWorker(QThread):
                         "stageNo": str(p_no),
                         "searchType": "amt",
                         "current": 1,
-                        "size": 50
+                        "size": 1000
                     }
                     # 增加超时时间到 15s
                     detail_res = requests.post(detail_url, json=detail_payload, headers=headers, timeout=15)
@@ -475,18 +612,20 @@ class BettingWorker(QThread):
     balance_low_signal = pyqtSignal()       # 余额不足信号
     log_signal = pyqtSignal(str)            # 日志信号
     
-    def __init__(self, token, cookie, period, my_numbers, unit_bet):
+    def __init__(self, token, cookie, period, my_numbers, unit_bet, deadline_timestamp=None):
         super().__init__()
         self.token = token
         self.cookie = cookie
         self.period = period
         self.my_numbers = my_numbers
         self.unit_bet = unit_bet
+        self.deadline = deadline_timestamp
         
     def run(self):
         try:
             import requests
             import uuid
+            import time
             
             # 构造 betNoList
             betNoList = []
@@ -495,10 +634,9 @@ class BettingWorker(QThread):
             
             total_money = len(self.my_numbers) * self.unit_bet
             
-            # 生成 ock (UUID with hyphens replaced by 'f')
+            # 生成 ock (保持不变，防止重复扣款)
             ock = str(uuid.uuid4()).replace('-', 'f')
             
-            # 发送请求
             url = "http://f5.ab311c.com/member/bet/doOrder"
             payload = {
                 "betNoList": betNoList,
@@ -514,29 +652,67 @@ class BettingWorker(QThread):
                 "Cookie": self.cookie
             }
             
-            # 发送日志信号到UI
-            self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}, ock={ock}")
-            
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                res_json = response.json()
-                # 新站成功返回的是订单列表或 successCode
-                success_code = res_json.get("successCode", 0)
+            # 智能重试循环
+            batch_count = 0
+            while True:
+                # 检查是否超时 (截止前5秒停止尝试)
+                if self.deadline and time.time() > (self.deadline - 5):
+                     self.error_signal.emit(f"已接近封盘时间，停止重试。")
+                     return
+
+                batch_count += 1
                 
-                if success_code > 0:
-                    msg = f"下单成功 ({success_code}注)"
-                    self.success_signal.emit(self.period, msg)
-                else:
-                    fail_code = res_json.get("failCode", 0)
-                    error_msg = res_json.get('msg', f'下单失败 (错误码:{fail_code})')
-                    # 假设 failCode 为某个值时表示余额不足，这里暂不明确，先按通用错误处理
-                    self.error_signal.emit(f"API返回错误: {error_msg}")
-            else:
-                self.error_signal.emit(f"HTTP {response.status_code}")
-                
+                # 每轮尝试3次
+                for attempt in range(3):
+                    try:
+                        # 日志
+                        if batch_count == 1 and attempt == 0:
+                            self.log_signal.emit(f"🚀 发送下单请求: 期号={self.period}, 总额={total_money}")
+                        else:
+                            self.log_signal.emit(f"<font color='#FF8C00'><b>🔄 第{batch_count}轮-第{attempt+1}次重试...</b></font>")
+                        
+                        # 增加超时时间
+                        response = requests.post(url, json=payload, headers=headers, timeout=15)
+                        
+                        if response.status_code == 200:
+                            res_json = response.json()
+                            success_code = res_json.get("successCode", 0)
+                            
+                            if success_code > 0:
+                                msg = f"下单成功 ({success_code}注)"
+                                self.success_signal.emit(self.period, msg)
+                                return 
+                            else:
+                                fail_code = res_json.get("failCode", 0)
+                                error_msg = res_json.get('msg', f'下单失败 ({fail_code})')
+                                # 某些错误(如余额不足)可能需要重试，但余额不足不需要
+                                if "余额不足" in error_msg:
+                                    self.error_signal.emit(f"API返回错误: {error_msg}")
+                                    return
+                                    
+                                # 其他API错误，记录并继续重试 (可能是服务器繁忙)
+                                self.log_signal.emit(f"<font color='red'>API拒绝: {error_msg}</font>")
+                                
+                        else:
+                             self.log_signal.emit(f"<font color='red'>HTTP {response.status_code}</font>")
+                             
+                    except Exception as e:
+                        self.log_signal.emit(f"<font color='#FF8C00'>连接异常: {str(e)}</font>")
+                    
+                    # 每次小尝试间隔3秒
+                    time.sleep(3)
+                    
+                    # 再次检查时间
+                    if self.deadline and time.time() > (self.deadline - 5):
+                         self.error_signal.emit(f"已接近封盘时间，停止重试。")
+                         return
+
+                # 一轮3次都失败，等待15秒
+                self.log_signal.emit(f"<font color='red'>⚠️ 本轮3次重试均失败，等待15秒后继续...</font>")
+                time.sleep(15)
+
         except Exception as e:
-            self.error_signal.emit(f"下单异常: {str(e)}")
+            self.error_signal.emit(f"下单未知异常: {str(e)}")
 
 
 class RealtimeDataWorker(QThread):
@@ -639,6 +815,9 @@ class Canada28Simulator(QMainWindow):
         # 主分割器 (左右布局)
         self.main_splitter = QSplitter(Qt.Horizontal)
         self.setCentralWidget(self.main_splitter)
+        
+        # self.create_menu_bar() # 用户要求移到底部Tab中
+        
         
         # === 左侧：浏览器面板 ===
         self.browser_panel = QWidget()
@@ -873,6 +1052,12 @@ class Canada28Simulator(QMainWindow):
         sync_group = QGroupBox("账单同步")
         sync_layout = QHBoxLayout()
         
+        sync_layout.addWidget(QLabel("同步限制:"))
+        self.combo_sync_limit = QComboBox()
+        self.combo_sync_limit.addItems(["10", "25", "50", "100", "1000(全部)"])
+        self.combo_sync_limit.setCurrentIndex(0) # Default 10
+        sync_layout.addWidget(self.combo_sync_limit)
+        
         self.btn_sync_profit = QPushButton("同步真实盈亏")
         self.btn_sync_profit.clicked.connect(self.fetch_real_account_history)
         sync_layout.addWidget(self.btn_sync_profit)
@@ -1014,6 +1199,19 @@ class Canada28Simulator(QMainWindow):
         
         grp_stop.setLayout(layout_stop)
         settings_layout.addWidget(grp_stop)
+        
+        # === 数据维护 (新加) ===
+        grp_data = QGroupBox("数据维护")
+        layout_data = QHBoxLayout()
+        
+        btn_check_integrity = QPushButton("检查数据完整性")
+        btn_check_integrity.setToolTip("检查本地数据是否有缺失，并尝试自动修复")
+        btn_check_integrity.clicked.connect(self.check_data_integrity)
+        layout_data.addWidget(btn_check_integrity)
+        
+        layout_data.addStretch()
+        grp_data.setLayout(layout_data)
+        settings_layout.addWidget(grp_data)
         
         settings_splitter.addWidget(settings_widget)
         
@@ -2504,7 +2702,17 @@ class Canada28Simulator(QMainWindow):
         # 使用异步Worker发送请求（避免阻塞UI）
         self.log_run(f"🚀 准备下单: 期号={period}, 总额={total_money}")
         
-        self.betting_worker = BettingWorker(self.token, self.cookie, period, self.my_numbers, unit_bet)
+        # 计算截止时间 (用于智能重试)
+        bg_deadline = time.time() + 150 # 默认给予充足时间
+        if hasattr(self, 'countdown_target_monotonic'):
+             try:
+                 remaining = self.countdown_target_monotonic - time.monotonic()
+                 if remaining > 0:
+                     bg_deadline = time.time() + remaining
+             except:
+                 pass
+
+        self.betting_worker = BettingWorker(self.token, self.cookie, period, self.my_numbers, unit_bet, bg_deadline)
         self.betting_worker.success_signal.connect(self.on_betting_success)
         self.betting_worker.error_signal.connect(self.on_betting_error)
         self.betting_worker.balance_low_signal.connect(self.on_betting_balance_low)
@@ -2529,7 +2737,8 @@ class Canada28Simulator(QMainWindow):
     def on_betting_error(self, error_msg):
         """下注错误回调"""
         self.log_run(f"❌ 下单失败: {error_msg}")
-        QMessageBox.warning(self, "下单失败", error_msg)
+        # QMessageBox.warning(self, "下单失败", error_msg) # 移除弹窗，防止挂机时阻塞
+        self.statusBar().showMessage(f"❌ 下单失败: {error_msg}", 5000)
     
     def on_betting_balance_low(self):
         """余额不足回调"""
@@ -2553,8 +2762,18 @@ class Canada28Simulator(QMainWindow):
         if hasattr(self.data_manager, 'cookie') and self.data_manager.cookie != self.cookie:
              self.data_manager.set_auth(self.token, self.cookie)
 
+        # 获取用户设置的同步数量
+        limit_text = self.combo_sync_limit.currentText()
+        if "全部" in limit_text:
+            limit = 1000
+        else:
+            try:
+                limit = int(limit_text)
+            except:
+                limit = 50
+
         # 启动异步线程
-        self.account_sync_worker = AccountSyncWorker(self.token, self.cookie)
+        self.account_sync_worker = AccountSyncWorker(self.token, self.cookie, limit)
         self.account_sync_worker.progress_signal.connect(self.log_run)
         self.account_sync_worker.finished_signal.connect(self.on_account_sync_finished)
         self.account_sync_worker.error_signal.connect(self.on_account_sync_error)
@@ -4255,7 +4474,7 @@ class Canada28Simulator(QMainWindow):
                 "stageNo": str(period_no),
                 "searchType": "amt",
                 "current": 1,
-                "size": 50
+                "size": 1000  # 增加到1000条以查全大额注单
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
@@ -4281,9 +4500,10 @@ class Canada28Simulator(QMainWindow):
                 return
                 
             # 构造详情文本
-            detail_text = f"<b>期号: {period_no}</b><br><br>"
-            detail_text += "<table border='1' cellpadding='5' style='border-collapse: collapse;'>"
-            detail_text += "<tr><th>号码</th><th>单注</th><th>赔率</th><th>投入</th><th>结果</th><th>时间</th></tr>"
+            detail_text = f"<h3>第 {period_no} 期下单详情</h3>"
+            detail_text += f"<p>共查询到 {len(orders)} 条记录</p>"
+            detail_text += "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse: collapse; width: 100%;'>"
+            detail_text += "<tr style='background-color: #f0f0f0;'><th>号码</th><th>单注</th><th>赔率</th><th>投入</th><th>结果</th><th>时间</th></tr>"
             
             total_bet = 0.0
             total_prize = 0.0
@@ -4295,25 +4515,110 @@ class Canada28Simulator(QMainWindow):
                 prize = o.get("bonusAmt", "0")
                 time_str = o.get("ordTime", "").split(" ")[1] if " " in o.get("ordTime", "") else o.get("ordTime", "")
                 
+                # 只有赢的时候 bonusAmt 才是中奖金额，如果不中 bonusAmt 是 0
+                
                 total_bet += float(unit)
                 total_prize += float(prize)
                 
-                detail_text += f"<tr><td>{num}</td><td>{unit}</td><td>{odds}</td><td>{unit}</td><td>{prize}</td><td>{time_str}</td></tr>"
+                color = "green" if float(prize) > 0 else "black"
+                detail_text += f"<tr><td>{num}</td><td>{unit}</td><td>{odds}</td><td>{unit}</td><td><font color='{color}'>{prize}</font></td><td>{time_str}</td></tr>"
             
             detail_text += "</table>"
-            detail_text += f"<br><b>总计投入: {total_bet:.2f}</b>"
-            detail_text += f"<br><b>总计中奖: {total_prize:.2f}</b>"
-            detail_text += f"<br><b>本期盈亏: <font color='{'red' if total_prize-total_bet > 0 else 'green'}'>{total_prize-total_bet:.2f}</font></b>"
+            detail_text += "<br><hr>"
+            detail_text += f"<p><b>总计投入: {total_bet:.2f}</b></p>"
+            detail_text += f"<p><b>总计中奖: {total_prize:.2f}</b></p>"
+            net_profit = total_prize - total_bet
+            color = "red" if net_profit > 0 else "green"
+            detail_text += f"<p><b>本期盈亏: <font color='{color}' size='4'>{net_profit:.2f}</font></b></p>"
             
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle(f"第 {period_no} 期下单详情")
-            msg_box.setTextFormat(Qt.RichText)
-            msg_box.setText(detail_text)
-            msg_box.exec_()
+            # 使用自定义对话框显示 (支持滚动)
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"第 {period_no} 期详情")
+            dialog.resize(600, 600)
+            
+            layout = QVBoxLayout(dialog)
+            
+            text_browser = QTextBrowser()
+            text_browser.setHtml(detail_text)
+            layout.addWidget(text_browser)
+            
+            btn_close = QPushButton("关闭")
+            btn_close.clicked.connect(dialog.accept)
+            layout.addWidget(btn_close)
+            
+            dialog.exec_()
             
         except Exception as e:
             self.log_run(f"❌ 查询详情异常: {e}")
             QMessageBox.critical(self, "错误", f"查询详情时发生异常: {e}")
+
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()
+        
+        # 工具菜单
+        tools_menu = menubar.addMenu('工具')
+        
+        check_integrity_act = QAction('检查数据完整性', self)
+        check_integrity_act.setStatusTip('检查本地数据是否有缺失，并尝试自动修复')
+        check_integrity_act.triggered.connect(self.check_data_integrity)
+        tools_menu.addAction(check_integrity_act)
+
+    def check_data_integrity(self):
+        """检查数据完整性"""
+        self.log_run("🔍 正在检查数据完整性...")
+        try:
+            missing_periods = self.data_manager.find_missing_periods()
+        except Exception as e:
+             QMessageBox.critical(self, "错误", f"检查失败: {e}")
+             return
+        
+        if not missing_periods:
+            QMessageBox.information(self, "完整性检查", "✅ 本地数据完整，未发现缺失期号。")
+            self.log_run("✅ 数据完整性检查通过，本地数据完整。")
+            return
+            
+        # 限制显示数量，防止弹窗太大
+        display_missing = missing_periods[:50]
+        msg = f"⚠️ 发现 {len(missing_periods)} 个断号缺失:\n\n"
+        msg += ", ".join(map(str, display_missing))
+        if len(missing_periods) > 50:
+            msg += f"\n... 以及其他 {len(missing_periods)-50} 个"
+            
+        msg += "\n\n是否尝试自动修复这些缺失数据？\n(程序将从服务器自动下载缺失记录，可能需要一些时间)"
+        
+        reply = QMessageBox.question(self, "发现缺失数据", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        
+        if reply == QMessageBox.Yes:
+            self.start_data_repair(missing_periods)
+
+    def start_data_repair(self, missing_periods):
+        """开始数据修复"""
+        if hasattr(self, 'repair_worker') and self.repair_worker.isRunning():
+            QMessageBox.warning(self, "提示", "修复任务正在进行中...")
+            return
+            
+        self.log_run(f"🔧 开始修复 {len(missing_periods)} 条缺失数据...")
+        
+        # 禁用相关按钮防止冲突
+        if hasattr(self, 'btn_sync_profit'): self.btn_sync_profit.setEnabled(False)
+        
+        self.repair_worker = DataRepairWorker(self.data_manager, missing_periods)
+        self.repair_worker.progress_signal.connect(self.log_run)
+        self.repair_worker.finished_signal.connect(self.on_repair_finished)
+        self.repair_worker.start()
+        
+    def on_repair_finished(self, msg):
+        """修复完成回调"""
+        self.log_run(msg)
+        QMessageBox.information(self, "修复完成", msg)
+        
+        # 恢复按钮
+        if hasattr(self, 'btn_sync_profit'): self.btn_sync_profit.setEnabled(True)
+        
+        # 刷新表格
+        self.update_history_table()
+        self.update_chart()
 
 # === 全局配置 (放在 import 之后, App 初始化之前) ===
 # 根据运行环境智能配置浏览器引擎参数
