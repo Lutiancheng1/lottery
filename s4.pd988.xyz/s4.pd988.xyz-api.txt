@@ -1,0 +1,1049 @@
+账户信息接口 
+https://s4.pd988.xyz/initUserInfo?_=1769506674333
+请求方法
+GET
+状态代码
+200 OK
+远程地址
+103.216.228.175:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:38:02 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值 
+{
+    "ac": "dsds6789",
+    "code": 703,
+    "credit": {
+        "title": "",
+        "HUSE": 0,
+        "title1": "",
+        "SURP": 10000000,
+        "CURR": 10000000
+    },
+    "msg": "查询成功"
+}
+
+初始化首页的接口? 分析下是做什么用的
+https://s4.pd988.xyz/initHome?awaken=180&_=1769506738418
+请求方法
+GET
+状态代码
+200 OK
+远程地址
+103.216.228.175:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:38:58 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值 {
+    "crt": "2026-01-27 17:38:58",
+    "code": 700,
+    "SURP": 10000000,
+    "lottry": {
+        "lttnum": 3389438,
+        "remainTime": 22184,
+        "ltn": 3389438,
+        "opt": "2026-01-27 17:36:30",
+        "ltt": "2026-01-27 17:39:21"
+    },
+    "msg": "操作成功"
+}
+
+
+当前开奖号码的接口??
+
+
+https://s4.pd988.xyz/queryCurr
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+103.216.228.175:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:38:58 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+content-length
+0
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+origin
+https://s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+
+返回值 
+{
+    "clot": 3389438,
+    "lcc": 0,
+    "printed": 0,
+    "list": [],
+    "code": 700,
+    "msg": "操作成功",
+    "lac": 0
+}
+
+手动点击刷新按钮刷新开奖号码时触发的接口 
+
+
+https://s4.pd988.xyz/refresh
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+103.216.228.175:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:38:58 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+content-length
+0
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+origin
+https://s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+返回值 
+
+{
+    "data": {
+        "NUMS": "3,1,1",
+        "LTTNUM": 3389437
+    },
+    "code": 700,
+    "msg": "操作成功"
+}
+
+
+
+下注的请求 
+
+
+https://s4.pd988.xyz/lot/beting
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+103.216.228.175:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:44:11 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+application/json, text/javascript, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+content-length
+195
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+origin
+https://s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+传参
+paramMap.nms=%5B%7B%22nm%22%3A%22001%22%2C%22am%22%3A1000%7D%2C%7B%22nm%22%3A%22002%22%2C%22am%22%3A1000%7D%5D&paramMap.bw=4&paramMap.ltm=3389440&paramMap.ock=c7ed0021fd255f440bf9d08fbcc8c4d9603d
+
+解码后
+paramMap.nms
+[{"nm":"001","am":1000},{"nm":"002","am":1000}]
+paramMap.bw
+4
+paramMap.ltm
+3389440
+paramMap.ock
+c7ed0021fd255f440bf9d08fbcc8c4d9603d
+
+返回值 
+
+{
+    "scc": 2,
+    "fdi": "[]",
+    "cdi": {
+        "spl": 9998000,
+        "usd": 2000,
+        "cur": 10000000
+    },
+    "fsq": 1769102961569,
+    "sci": "[{\"id\":1769102961572,\"od\":9980000,\"fsq\":1769102961569,\"am\":1000,\"nm\":\"001\",\"bt\":\"口口口\"},{\"id\":1769102961573,\"od\":9980000,\"fsq\":1769102961569,\"am\":1000,\"nm\":\"002\",\"bt\":\"口口口\"}]",
+    "fdc": 0,
+    "msg": ""
+}
+
+
+下过单之后 
+https://s4.pd988.xyz/queryCurr 这个请求的返回值会 多 
+现在为 {
+    "oneNum": "33894401769102961572",
+    "clot": 3389440,
+    "oneTiem": "2026-01-27 17:44:11",
+    "lcc": 2,
+    "printed": 0,
+    "list": [
+        {
+            "LTTSTAUTS": 1,
+            "BETNUM": "001",
+            "BTIID": 1769102961572,
+            "BETTIME": "2026-01-27 17:44:11",
+            "BLCODE": "口口口",
+            "ODDS": 9980000,
+            "STATUS": "normal",
+            "AMOUNT": 1000,
+            "BETUAID": 1234007416
+        },
+        {
+            "LTTSTAUTS": 1,
+            "BETNUM": "002",
+            "BTIID": 1769102961573,
+            "BETTIME": "2026-01-27 17:44:11",
+            "BLCODE": "口口口",
+            "ODDS": 9980000,
+            "STATUS": "normal",
+            "AMOUNT": 1000,
+            "BETUAID": 1234007416
+        }
+    ],
+    "code": 700,
+    "msg": "操作成功",
+    "lac": 2000
+} 
+里面有list
+
+
+历史账单的接口 
+https://s4.pd988.xyz/queryOrderHistory
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+103.216.228.175:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:50:51 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+content-length
+39
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+origin
+https://s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+传参 
+paramMap.pageNum
+1
+paramMap.pageSize
+300
+
+这个size最大在页面里显示300 你可以试试更大 
+
+返回值 
+{
+    "pageInfo": {
+        "endIndex": 300,
+        "list": [
+            {
+                "amounts": 2000,
+                "count": 2,
+                "bonuss": 0,
+                "selfrefunds": 0,
+                "yk": -2000,
+                "lttTime": "2026-01-27",
+                "lttNum": 3389440
+            }
+        ],
+        "pageCount": 1,
+        "pageNum": 1,
+        "pageSize": 300,
+        "rowCount": 1,
+        "startIndex": 0
+    },
+    "code": 700,
+    "msg": "操作成功"
+}
+
+下单明细 - 根据订单号点击进去的 
+https://s4.pd988.xyz/queryOrderDetail
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+103.216.228.182:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:52:21 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+content-length
+23
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+origin
+https://s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+传参
+paramMap.lttnum
+3389440
+
+返回值 
+
+{
+    "lttnum": "3389440",
+    "pageInfo": {
+        "endIndex": 20,
+        "list": [
+            {
+                "isWin": 0,
+                "status": "timeOut",
+                "bw": 4,
+                "code": "口口口",
+                "odds": 9980000,
+                "ct": null,
+                "bt": "2026-01-27 17:44:11",
+                "id": 1769102961573,
+                "amount": 1000,
+                "num": "002",
+                "seq": 1769102961569,
+                "iswin": 0,
+                "selfRefund": 0,
+                "bonus": 0,
+                "st": 1
+            },
+            {
+                "isWin": 0,
+                "status": "timeOut",
+                "bw": 4,
+                "code": "口口口",
+                "odds": 9980000,
+                "ct": null,
+                "bt": "2026-01-27 17:44:11",
+                "id": 1769102961572,
+                "amount": 1000,
+                "num": "001",
+                "seq": 1769102961569,
+                "iswin": 0,
+                "selfRefund": 0,
+                "bonus": 0,
+                "st": 1
+            }
+        ],
+        "pageCount": 1,
+        "pageNum": 1,
+        "pageSize": 20,
+        "rowCount": 2,
+        "startIndex": 0
+    },
+    "code": 700,
+    "msg": "操作成功"
+}
+
+
+页面明细展示 
+注单编号	下单时间	号码	类型	下注方式	金额	赔率	中奖	回水	盈亏	结果	状态	全选
+1769102961569	     2026-01-27 17:44:11	002	口口口	txt导入	0.1	998	0	0	-0.1	不中	正常	--
+1769102961569	     2026-01-27 17:44:11	001	口口口	txt导入	0.1	998	0	0	-0.1	不中	正常	--
+
+
+
+开奖号码历史记录 
+
+
+https://s4.pd988.xyz/page/lottery/showHistoryLottery
+请求方法
+POST
+状态代码
+200 OK
+远程地址
+103.216.228.182:443
+引荐来源网址政策
+strict-origin-when-cross-origin
+connection
+keep-alive
+content-encoding
+gzip
+content-type
+text/html;charset=utf-8
+date
+Tue, 27 Jan 2026 09:54:12 GMT
+server
+cloudflare
+transfer-encoding
+chunked
+vary
+Accept-Encoding
+accept
+text/plain, */*; q=0.01
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+zh-CN,zh;q=0.9,zh-HK;q=0.8,en-US;q=0.7,en;q=0.6,zh-TW;q=0.5
+connection
+keep-alive
+content-length
+24
+content-type
+application/x-www-form-urlencoded; charset=UTF-8
+cookie
+BMW=6A792C1ACBF28B448B0856081CF42833; BMW=6A792C1ACBF28B448B0856081CF42833
+host
+s4.pd988.xyz
+origin
+https://s4.pd988.xyz
+referer
+https://s4.pd988.xyz/index.html?t=1769506672544
+sec-ch-ua
+"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"macOS"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+x-requested-with
+XMLHttpRequest
+
+传参
+这个是查日期的时候 
+paramMap.lttnum
+20260127
+paramMap.pageNum
+1
+paramMap.pageSize
+200
+
+这个size 页面上最大支持200  你可以试试更大
+
+可选传指定期号查询
+这个 是输入里期号查询时
+paramMap.lttnum
+3389440
+
+
+查日期返回值 我这里只示例查10条的返回值
+{
+    "next2": {
+        "ISNEXT": 1,
+        "LTTTIME": "2026-01-27 18:00:59",
+        "LTTNUM": 3389444
+    },
+    "pageInfo": {
+        "endIndex": 10,
+        "list": [
+            {
+                "TEN": "0",
+                "TTS": "0",
+                "ONE": "4",
+                "HUNDRED": "8",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769507855180",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 57,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 35,
+                    "time": 1769507855000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:57:30",
+                "LTTNUM": 3389443,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "3",
+                "TTS": "0",
+                "ONE": "0",
+                "HUNDRED": "4",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769507646286",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 54,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 6,
+                    "time": 1769507646000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:54:00",
+                "LTTNUM": 3389442,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "9",
+                "TTS": "0",
+                "ONE": "9",
+                "HUNDRED": "6",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769507437187",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 50,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 37,
+                    "time": 1769507437000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:50:30",
+                "LTTNUM": 3389441,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "4",
+                "TTS": "0",
+                "ONE": "0",
+                "HUNDRED": "9",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769507226283",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 47,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 6,
+                    "time": 1769507226000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:47:00",
+                "LTTNUM": 3389440,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "9",
+                "TTS": "0",
+                "ONE": "8",
+                "HUNDRED": "5",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769507016333",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 43,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 36,
+                    "time": 1769507016000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:43:30",
+                "LTTNUM": 3389439,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "6",
+                "TTS": "0",
+                "ONE": "2",
+                "HUNDRED": "4",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769506806286",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 40,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 6,
+                    "time": 1769506806000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:40:00",
+                "LTTNUM": 3389438,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "1",
+                "TTS": "0",
+                "ONE": "1",
+                "HUNDRED": "3",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769506598193",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 36,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 38,
+                    "time": 1769506598000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:36:30",
+                "LTTNUM": 3389437,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "6",
+                "TTS": "0",
+                "ONE": "1",
+                "HUNDRED": "0",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769506387177",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 33,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 7,
+                    "time": 1769506387000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:33:00",
+                "LTTNUM": 3389436,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "8",
+                "TTS": "0",
+                "ONE": "2",
+                "HUNDRED": "7",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769506176255",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 29,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 36,
+                    "time": 1769506176000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:29:30",
+                "LTTNUM": 3389435,
+                "LTTER": -99,
+                "ISVALID": 1
+            },
+            {
+                "TEN": "0",
+                "TTS": "0",
+                "ONE": "7",
+                "HUNDRED": "3",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769505967364",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 26,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 7,
+                    "time": 1769505967000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:26:00",
+                "LTTNUM": 3389434,
+                "LTTER": -99,
+                "ISVALID": 1
+            }
+        ],
+        "pageCount": 31,
+        "pageNum": 1,
+        "pageSize": 10,
+        "rowCount": 308,
+        "startIndex": 0
+    },
+    "code": 700,
+    "msg": "操作成功"
+}
+
+查期号返回值 
+
+{
+    "pageInfo": {
+        "endIndex": 20,
+        "list": [
+            {
+                "TEN": "4",
+                "TTS": "0",
+                "ONE": "0",
+                "HUNDRED": "9",
+                "KILO": "0",
+                "LTYPE": 1,
+                "TIMESTEMP": "1769507226283",
+                "SAVETIME": {
+                    "date": 27,
+                    "day": 2,
+                    "hours": 17,
+                    "minutes": 47,
+                    "month": 0,
+                    "nanos": 0,
+                    "seconds": 6,
+                    "time": 1769507226000,
+                    "timezoneOffset": -480,
+                    "year": 126
+                },
+                "LTTSTATUS": 1,
+                "LTTTIME": "2026-01-27 17:47:00",
+                "LTTNUM": 3389440,
+                "LTTER": -99,
+                "ISVALID": 1
+            }
+        ],
+        "pageCount": 1,
+        "pageNum": 1,
+        "pageSize": 20,
+        "rowCount": 1,
+        "startIndex": 0
+    },
+    "code": 700,
+    "msg": "操作成功"
+}
+
+历史记录页面展示
+开奖时间	期号	佰	拾	个	总合(佰+拾+个)	龙虎和(佰:个)	番(拾|个)
+2026-01-27 18:00:59	3389444	--	--	--	--	--	--	--	--
+2026-01-27 17:57:30	3389443	8	0	4	12	小	双	龙	04 = 4
+2026-01-27 17:54:00	3389442	4	3	0	7	小	单	龙	30 = 2
+2026-01-27 17:50:30	3389441	6	9	9	24	大	双	虎	99 = 3
+
+你需要对比一下是否符合我们现在的历史列表的和数据库里的格式是能够否匹配上 

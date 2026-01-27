@@ -87,3 +87,31 @@ jobs:
         with:
           name: Canada28Simulator_F5_Client_Package
           path: f5.ab311c.com/*.zip
+  build-s4:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python s4.pd988.xyz/build_exe.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Canada28Simulator_S4_Client_Package
+          path: s4.pd988.xyz/*.zip
