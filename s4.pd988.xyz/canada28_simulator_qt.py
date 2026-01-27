@@ -129,15 +129,13 @@ class DataRepairWorker(QThread):
             import math
             
             latest_ref = None
+            latest_ref = None
             try:
-                url = f"{self.data_manager.base_url}/member/settingStage/page"
-                payload = {"current": 1, "size": 1, "stage": ""}
-                resp = self.data_manager.session.post(url, json=payload, headers=self.data_manager.headers, timeout=5)
-                rows = resp.json().get('data', {}).get('row', [])
-                if rows:
-                    latest_row = rows[0]
-                    l_no = int(latest_row.get('stageNo'))
-                    l_time = latest_row.get('openTime', '')
+                # 使用封装好的方法获取最新已开奖期号作为参照
+                latest_row = self.data_manager.get_remote_latest()
+                if latest_row:
+                    l_no = int(latest_row.get('period_no'))
+                    l_time = latest_row.get('overt_at', '')
                     if l_time:
                          l_dt = datetime.strptime(l_time, "%Y-%m-%d %H:%M:%S")
                          latest_ref = (l_no, l_dt)
@@ -256,55 +254,48 @@ class AccountSyncWorker(QThread):
             page = 1
             limit = self.limit
             real_bet_results = {}
+            SCALE = 10000.0 # 新站 1=10000
             
-            # 第一阶段：获取最近的历史报表 (member/report/history)
-            # 获取最近30天的数据
-            end_date = datetime.datetime.now()
-            start_date = end_date - datetime.timedelta(days=30)
-            
-            url = f"http://f5.ab311c.com/member/report/history"
+            # 第一阶段：获取最近的历史报表 (queryOrderHistory)
+            url = f"https://s4.pd988.xyz/queryOrderHistory"
             payload = {
-                "startTime": start_date.strftime("%Y-%m-%d"),
-                "endTime": end_date.strftime("%Y-%m-%d"),
-                "current": 1,
-                "current": 1,
-                "size": limit # Use limit from settings
+                "paramMap.pageNum": 1,
+                "paramMap.pageSize": limit # 使用设置中的限制
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
-                "Content-Type": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "Cookie": self.cookie
             }
             
             self.progress_signal.emit(f"📡 请求历史报表数据...")
             
-            # 增加超时时间到 30s
-            response = requests.post(url, json=payload, headers=headers, timeout=30)
+            response = requests.post(url, data=payload, headers=headers, timeout=30)
             if response.status_code == 200:
                 res_json = response.json()
-                if res_json.get("code") == 200:
-                    data_list = res_json.get("data", {}).get("row", [])
+                if res_json.get("code") == 700:
+                    data_list = res_json.get("pageInfo", {}).get("list", [])
                     
                     # 累加盈亏并存储记录
                     for item in data_list:
-                        p_no = str(item.get("stageNo"))
+                        p_no = str(item.get("lttNum"))
                         
                         # 转换数值
                         try:
-                            # 报表接口字段：orderMemberTotalAmt(总投), memberBonusAmt(中奖), ykAmt(盈亏)
-                            total_bet_val = float(item.get("orderMemberTotalAmt", 0) or 0)
-                            win_amount_val = float(item.get("memberBonusAmt", 0) or 0)
-                            profit_val = float(item.get("ykAmt", 0) or 0)
+                            # 报表接口字段：amounts(总投), bonuss(中奖), yk(盈亏)
+                            total_bet_val = float(item.get("amounts", 0) or 0) / SCALE
+                            win_amount_val = float(item.get("bonuss", 0) or 0) / SCALE
+                            profit_val = float(item.get("yk", 0) or 0) / SCALE
                         except (ValueError, TypeError):
                             total_bet_val = 0.0
                             win_amount_val = 0.0
                             profit_val = 0.0
-
+ 
                         if p_no not in real_bet_results:
                             real_bet_results[p_no] = {
                                 'total_bet': total_bet_val,
-                                'unit_bet': 0.0, # 稍后从明细获取
+                                'unit_bet': 0.0, 
                                 'win_amount': win_amount_val,
                                 'profit': profit_val,
                                 'total_profit': 0.0,
@@ -320,32 +311,28 @@ class AccountSyncWorker(QThread):
             # 第二阶段：获取最近N期的详细明细
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
             
-            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:limit]
+            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:20] # 每次最多同步最近20期明细，避免过慢
             for idx, p_no in enumerate(recent_periods):
                 try:
                     self.progress_signal.emit(f"🔍 获取第{p_no}期明细 ({idx+1}/{len(recent_periods)})")
-                    detail_url = f"http://f5.ab311c.com/member/orders/ordersInfoList"
+                    detail_url = f"https://s4.pd988.xyz/queryOrderDetail"
                     detail_payload = {
-                        "stageNo": str(p_no),
-                        "searchType": "amt",
-                        "current": 1,
-                        "size": 1000
+                        "paramMap.lttnum": str(p_no)
                     }
-                    # 增加超时时间到 15s
-                    detail_res = requests.post(detail_url, json=detail_payload, headers=headers, timeout=15)
+                    detail_res = requests.post(detail_url, data=detail_payload, headers=headers, timeout=15)
                     if detail_res.status_code == 200:
                         detail_json = detail_res.json()
-                        if detail_json.get("code") == 200:
-                            orders = detail_json.get("data", {}).get("row", [])
+                        if detail_json.get("code") == 700:
+                            orders = detail_json.get("pageInfo", {}).get("list", [])
                             if orders:
                                 t_bet = 0.0
                                 t_prize = 0.0
                                 u_bet = 0.0
                                 for o in orders:
-                                    t_bet += float(o.get("amt", 0))
-                                    t_prize += float(o.get("bonusAmt", 0))
+                                    t_bet += float(o.get("amount", 0)) / SCALE
+                                    t_prize += float(o.get("bonus", 0)) / SCALE
                                     if u_bet == 0: 
-                                        u_bet = float(o.get("amt", 0))
+                                        u_bet = float(o.get("amount", 0)) / SCALE
                                 
                                 if p_no in real_bet_results:
                                     real_bet_results[p_no]['total_bet'] = t_bet
@@ -626,29 +613,32 @@ class BettingWorker(QThread):
             import requests
             import uuid
             import time
+            import json
             
-            # 构造 betNoList
-            betNoList = []
+            SCALE = 10000 # 新站金额单位 0.0001
+            
+            # 构造 nms 列表 (内部 am 需乘以 SCALE)
+            nms_list = []
             for num in self.my_numbers:
-                betNoList.append({"bn": str(num), "am": str(self.unit_bet)})
+                nms_list.append({"nm": str(num), "am": int(float(self.unit_bet) * SCALE)})
             
             total_money = len(self.my_numbers) * self.unit_bet
             
-            # 生成 ock (保持不变，防止重复扣款)
+            # 生成 ock
             ock = str(uuid.uuid4()).replace('-', 'f')
             
-            url = "http://f5.ab311c.com/member/bet/doOrder"
+            url = "https://s4.pd988.xyz/lot/beting"
             payload = {
-                "betNoList": betNoList,
-                "orderWays": 6,
-                "stageNo": str(self.period),
-                "ock": ock
+                "paramMap.nms": json.dumps(nms_list),
+                "paramMap.bw": "4", # 玩法 ID，新站口口口对应 4
+                "paramMap.ltm": str(self.period),
+                "paramMap.ock": ock
             }
             
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
-                "Content-Type": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "Cookie": self.cookie
             }
             
@@ -659,7 +649,7 @@ class BettingWorker(QThread):
                 if self.deadline and time.time() > (self.deadline - 5):
                      self.error_signal.emit(f"已接近封盘时间，停止重试。")
                      return
-
+ 
                 batch_count += 1
                 
                 # 每轮尝试3次
@@ -672,25 +662,23 @@ class BettingWorker(QThread):
                             self.log_signal.emit(f"<font color='#FF8C00'><b>🔄 第{batch_count}轮-第{attempt+1}次重试...</b></font>")
                         
                         # 增加超时时间
-                        response = requests.post(url, json=payload, headers=headers, timeout=15)
+                        response = requests.post(url, data=payload, headers=headers, timeout=15)
                         
                         if response.status_code == 200:
                             res_json = response.json()
-                            success_code = res_json.get("successCode", 0)
+                            success_code = res_json.get("scc", 0) # 新站成功计数为 scc
                             
                             if success_code > 0:
                                 msg = f"下单成功 ({success_code}注)"
-                                self.success_signal.emit(self.period, msg)
+                                self.success_signal.emit(str(self.period), msg)
                                 return 
                             else:
-                                fail_code = res_json.get("failCode", 0)
-                                error_msg = res_json.get('msg', f'下单失败 ({fail_code})')
-                                # 某些错误(如余额不足)可能需要重试，但余额不足不需要
+                                error_msg = res_json.get('msg', '下单失败')
                                 if "余额不足" in error_msg:
                                     self.error_signal.emit(f"API返回错误: {error_msg}")
                                     return
                                     
-                                # 其他API错误，记录并继续重试 (可能是服务器繁忙)
+                                # 其他API错误，记录并继续重试
                                 self.log_signal.emit(f"<font color='red'>API拒绝: {error_msg}</font>")
                                 
                         else:
@@ -706,11 +694,11 @@ class BettingWorker(QThread):
                     if self.deadline and time.time() > (self.deadline - 5):
                          self.error_signal.emit(f"已接近封盘时间，停止重试。")
                          return
-
+ 
                 # 一轮3次都失败，等待15秒
                 self.log_signal.emit(f"<font color='red'>⚠️ 本轮3次重试均失败，等待15秒后继续...</font>")
                 time.sleep(15)
-
+ 
         except Exception as e:
             self.error_signal.emit(f"下单未知异常: {str(e)}")
 
@@ -826,7 +814,7 @@ class Canada28Simulator(QMainWindow):
         
         # 浏览器控制栏
         browser_toolbar = QHBoxLayout()
-        self.url_input = QLineEdit("http://f5.ab311c.com/")
+        self.url_input = QLineEdit("https://s4.pd988.xyz/")
         btn_go = QPushButton("前往")
         btn_go.clicked.connect(self.load_url)
         
@@ -858,7 +846,7 @@ class Canada28Simulator(QMainWindow):
         # === 浏览器调试信号 ===
         self.browser.loadStarted.connect(lambda: logging.info("🔵 浏览器: 开始加载页面"))
         self.browser.loadProgress.connect(lambda p: logging.info(f"🔵 浏览器: 加载进度 {p}%"))
-        self.browser.loadFinished.connect(lambda ok: logging.info(f"🔵 浏览器: 加载结束 - {'成功' if ok else '失败'}"))
+        self.browser.loadFinished.connect(self.on_browser_load_finished)
         self.browser.renderProcessTerminated.connect(
             lambda t, e: logging.error(f"🔴 浏览器渲染进程崩溃! 类型:{t}, 代码:{e}")
         )
@@ -870,7 +858,7 @@ class Canada28Simulator(QMainWindow):
         except Exception as e:
             logging.error(f"❌ 无法加载 SSL 模块: {e}")
 
-        self.browser.setUrl(QUrl("http://f5.ab311c.com/"))
+        self.browser.setUrl(QUrl("https://s4.pd988.xyz/"))
         
         # 监听Cookie变化 (主动模式，绕过HttpOnly限制)
         self.browser.page().profile().cookieStore().cookieAdded.connect(self.on_cookie_added)
@@ -1993,6 +1981,28 @@ class Canada28Simulator(QMainWindow):
             url = 'https://' + url
         self.browser.setUrl(QUrl(url))
 
+    def on_browser_load_finished(self, ok):
+        """浏览器页面加载完成回调"""
+        logging.info(f"🔵 浏览器: 加载结束 - {'成功' if ok else '失败'}")
+        if ok:
+            # 自动化操作：识别输入框输入 a1 并点击搜索
+            js_code = """
+            (function() {
+                var input = document.querySelector('input[name="keywork"]');
+                var btn = document.querySelector('button.btn-search');
+                if (input && btn) {
+                    console.log('🔍 发现搜索框，准备自动输入 a1...');
+                    input.value = 'a1';
+                    // 模拟点击
+                    setTimeout(function() {
+                        btn.click();
+                        console.log('🚀 自动点击搜索按钮已执行');
+                    }, 500); 
+                }
+            })();
+            """
+            self.browser.page().runJavaScript(js_code)
+
     def get_config_path(self, filename):
         """获取配置文件的绝对路径"""
         if getattr(sys, 'frozen', False):
@@ -2033,8 +2043,20 @@ class Canada28Simulator(QMainWindow):
         """保存认证信息到本地"""
         try:
             token_path = self.get_config_path("token.json")
+            
+            # 清理 Cookie，只保存关键的 BMW，避免文件过大和杂乱
+            clean_cookie = self.cookie
+            if self.cookie and "BMW=" in self.cookie:
+                try:
+                    import re
+                    match = re.search(r'(BMW=[^;]+)', self.cookie)
+                    if match:
+                        clean_cookie = match.group(1)
+                except:
+                    pass
+            
             with open(token_path, "w") as f:
-                json.dump({"token": self.token, "cookie": self.cookie}, f)
+                json.dump({"token": self.token, "cookie": clean_cookie}, f)
             print("💾 认证信息已保存")
         except Exception as e:
             print(f"❌ 保存认证信息失败: {e}")
@@ -2075,13 +2097,13 @@ class Canada28Simulator(QMainWindow):
                         self.my_numbers = set(config["my_numbers"])
                         self.update_numbers_display() # 立即刷新界面显示
                         print(f"✅ 已从配置加载号码池: {len(self.my_numbers)} 个号码")
+                        
             except Exception as e:
                 print(f"❌ 加载配置失败: {e}")
 
     def save_config(self):
         """保存配置"""
         try:
-            config = {
             config = {
                 # "last_numbers_file" 已废弃
                 "payout": self.spin_payout.value(),
@@ -2101,7 +2123,7 @@ class Canada28Simulator(QMainWindow):
             config_path = self.get_config_path("config.json")
             with open(config_path, "w") as f:
                 json.dump(config, f)
-            # print("💾 配置已保存")
+            # print("💾 配置已保存") # 频繁保存就不打印了
         except Exception as e:
             error_msg = f"无法保存配置文件到:\n{self.get_config_path('config.json')}\n\n错误信息:\n{e}"
             print(f"❌ 保存配置失败: {e}")
@@ -2272,7 +2294,7 @@ class Canada28Simulator(QMainWindow):
         self.extract_token(silent=True)
 
     def extract_token(self, silent=False):
-        """从浏览器中提取认证信息 (针对 f5.ab311c.com)"""
+        """从浏览器中提取认证信息 (针对 s4.pd988.xyz)"""
         self._is_silent_extract = silent # 标记是否为静默提取
         
         # HttpOnly Cookie 无法通过 JS 提取，必须通过 CookieStore
@@ -4516,17 +4538,14 @@ class Canada28Simulator(QMainWindow):
         self.log_run(f"🔍 正在查询第 {period_no} 期下单详情...")
         
         try:
-            url = f"http://f5.ab311c.com/member/orders/ordersInfoList"
+            url = f"https://s4.pd988.xyz/queryOrderDetail"
             payload = {
-                "stageNo": str(period_no),
-                "searchType": "amt",
-                "current": 1,
-                "size": 1000  # 增加到1000条以查全大额注单
+                "paramMap.lttnum": str(period_no)
             }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
-                "Content-Type": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                 "Cookie": self.cookie
             }
             
@@ -4535,13 +4554,14 @@ class Canada28Simulator(QMainWindow):
                 self.log_run(f"❌ 查询详情失败: HTTP {response.status_code}")
                 return
                 
+            SCALE = 10000.0
             res_json = response.json()
-            if res_json.get("code") != 200:
+            if res_json.get("code") != 700:
                 self.log_run(f"ℹ️ 未查询到详情: {res_json.get('msg')}")
                 QMessageBox.information(self, f"第 {period_no} 期详情", "未查询到该期下单详情")
                 return
                 
-            orders = res_json.get("data", {}).get("row", [])
+            orders = res_json.get("pageInfo", {}).get("list", [])
             if not orders:
                 QMessageBox.information(self, f"第 {period_no} 期详情", "该期无下单记录")
                 return
@@ -4556,19 +4576,17 @@ class Canada28Simulator(QMainWindow):
             total_prize = 0.0
             
             for o in orders:
-                num = o.get("betNo", "")
-                unit = o.get("amt", "0")
-                odds = o.get("odds", "0")
-                prize = o.get("bonusAmt", "0")
-                time_str = o.get("ordTime", "").split(" ")[1] if " " in o.get("ordTime", "") else o.get("ordTime", "")
-                
-                # 只有赢的时候 bonusAmt 才是中奖金额，如果不中 bonusAmt 是 0
+                num = o.get("num", "")
+                unit = float(o.get("amount", "0")) / SCALE
+                odds = float(o.get("odds", "0")) / SCALE
+                prize = float(o.get("bonus", "0")) / SCALE
+                time_str = o.get("bt", "").split(" ")[1] if " " in o.get("bt", "") else o.get("bt", "")
                 
                 total_bet += float(unit)
                 total_prize += float(prize)
                 
                 color = "green" if float(prize) > 0 else "black"
-                detail_text += f"<tr><td>{num}</td><td>{unit}</td><td>{odds}</td><td>{unit}</td><td><font color='{color}'>{prize}</font></td><td>{time_str}</td></tr>"
+                detail_text += f"<tr><td>{num}</td><td>{unit:.2f}</td><td>{odds:.2f}</td><td>{unit:.2f}</td><td><font color='{color}'>{prize:.2f}</font></td><td>{time_str}</td></tr>"
             
             detail_text += "</table>"
             detail_text += "<br><hr>"
