@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QLineEdit, QTextEdit, QMessageBox, QGroupBox, QTableWidget,
                              QTableWidgetItem, QHeaderView, QComboBox, QCheckBox, QSpinBox,
                              QDoubleSpinBox, QFileDialog, QTabWidget, QInputDialog, QRadioButton,
-                             QSizePolicy, QGridLayout, QDateEdit)
+                             QSizePolicy, QGridLayout, QDateEdit, QDialog, QTextBrowser, QAction)
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer, pyqtSignal, QObject, QThread, qInstallMessageHandler, QtMsgType, QDate
 from PyQt5.QtGui import QFont, QColor
@@ -98,6 +98,136 @@ class DataSyncWorker(QThread):
         except Exception as e:
             self.progress_signal.emit(f"同步失败: {e}")
             self.finished_signal.emit(False)
+
+
+class DataRepairWorker(QThread):
+    """数据修复工作线程"""
+    progress_signal = pyqtSignal(str)   # 进度提示
+    finished_signal = pyqtSignal(str)   # 完成信号
+    
+    def __init__(self, data_manager, missing_periods):
+        super().__init__()
+        self.data_manager = data_manager
+        self.missing_periods = missing_periods
+        self.is_running = True
+        
+    def stop(self):
+        self.is_running = False
+        
+    def run(self):
+        try:
+            total_missing = len(self.missing_periods)
+            if total_missing == 0:
+                self.finished_signal.emit("没有缺失数据需要修复。")
+                return
+
+            self.progress_signal.emit("正在分析缺失数据分布...")
+            
+            # 1. 获取最新期号作为参照 (用于计算日期)
+            from datetime import datetime, timedelta
+            import time
+            
+            latest_ref = None
+            try:
+                # s4 接口: initHome
+                url = f"{self.data_manager.base_url}/initHome"
+                resp = self.data_manager.session.post(url, json={}, headers=self.data_manager.headers, timeout=5)
+                res_json = resp.json()
+                n_period = res_json.get('data', {}).get('n_period', {})
+                if n_period:
+                    l_no = int(n_period.get('period_no'))
+                    # 使用当前时间作为参照，因为 s4 不直接返回最新已开奖的具体时间
+                    l_dt = datetime.now()
+                    latest_ref = (l_no, l_dt)
+            except Exception as e:
+                 self.finished_signal.emit(f"无法获取参照时间，修复终止: {e}")
+                 return
+
+            if not latest_ref:
+                self.finished_signal.emit("获取最新期号失败，无法进行批量修复。")
+                return
+
+            l_no, l_dt = latest_ref
+            
+            # 2. 对所有缺失期号进行日期归类
+            # 加拿大28通常是3.5分钟一期 (210秒)，一天约411期
+            PERIODS_PER_DAY = 24 * 60 * 60 / 210 # ~411.4
+            
+            date_map = {} # {'20260120': [3386695, 3386696...]}
+            
+            remaining_set = set(self.missing_periods)
+            
+            for p_no in self.missing_periods:
+                diff = l_no - p_no
+                days = diff / PERIODS_PER_DAY
+                target_dt = l_dt - timedelta(days=days)
+                date_str = target_dt.strftime("%Y%m%d")
+                
+                if date_str not in date_map:
+                    date_map[date_str] = []
+                date_map[date_str].append(p_no)
+            
+            # 3. 按日期排序
+            sorted_dates = sorted(date_map.keys())
+            
+            # 为了保险，增加相邻日期 (去重)
+            expanded_dates = []
+            seen_dates = set()
+            
+            for d_str in sorted_dates:
+                 try:
+                     d_dt = datetime.strptime(d_str, "%Y%m%d")
+                     # 前一天，当天，后一天
+                     candidates = [
+                         (d_dt - timedelta(days=1)).strftime("%Y%m%d"),
+                         d_str,
+                         (d_dt + timedelta(days=1)).strftime("%Y%m%d")
+                     ]
+                     for c in candidates:
+                         if c not in seen_dates:
+                             expanded_dates.append(c)
+                             seen_dates.add(c)
+                 except: pass
+            
+            repaired_count = 0
+            
+            # 4. 遍历日期拉取数据
+            total_dates = len(expanded_dates)
+            self.progress_signal.emit(f"计划扫描 {total_dates} 个日期节点...")
+            
+            for idx, date_str in enumerate(expanded_dates):
+                if not self.is_running: break
+                if not remaining_set: break
+                
+                self.progress_signal.emit(f"[{idx+1}/{total_dates}] 正在拉取 {date_str} 数据...")
+                
+                day_data = self.data_manager.fetch_daily_data(date_str)
+                if day_data:
+                    to_save = []
+                    # 检查拉取到的数据中有哪些是我们需要的
+                    for item in day_data:
+                        p = int(item['period_no'])
+                        if p in remaining_set:
+                            to_save.append(item)
+                            remaining_set.remove(p)
+                            repaired_count += 1
+                    
+                    if to_save:
+                        # 批量写入
+                        to_save.sort(key=lambda x: int(x['period_no']))
+                        self.data_manager.append_to_local_file(to_save)
+                        self.progress_signal.emit(f"✅ 日期 {date_str}: 修复了 {len(to_save)} 条数据")
+                
+                time.sleep(1.0) # 避免速率限制
+
+            # 5. 检查结果
+            if not remaining_set:
+                self.finished_signal.emit(f"完美修复！共修复 {repaired_count} / {total_missing} 条记录。")
+            else:
+                self.finished_signal.emit(f"修复完成，但仍有 {len(remaining_set)} 条未能修复。\n成功修复: {repaired_count} 条。")
+
+        except Exception as e:
+            self.finished_signal.emit(f"❌ 修复过程出错: {e}")
 
 
 class AccountSyncWorker(QThread):
@@ -598,11 +728,11 @@ class Canada28Simulator(QMainWindow):
         # 计算并显示历史极值
         self.calculate_historical_extremes()
             
-        # 连接参数变更信号 (用于记录日志)
-        self.connect_parameter_signals()
-            
         # 启动完成后开启自动检测 (延迟 5 秒，确保初始验证完成)
         QTimer.singleShot(5000, lambda: self.check_login_timer.start(2000))
+        
+        # 创建菜单栏
+        self.create_menu_bar()
             
     def init_ui(self):
         """初始化界面布局"""
@@ -4306,6 +4436,101 @@ class Canada28Simulator(QMainWindow):
         except Exception as e:
             self.log_run(f"❌ 查询详情异常: {e}")
             QMessageBox.critical(self, "错误", f"查询详情时发生异常: {e}")
+
+    def create_menu_bar(self):
+        """创建菜单栏"""
+        menubar = self.menuBar()
+        
+        # 工具菜单
+        tools_menu = menubar.addMenu('工具')
+        
+        check_integrity_act = QAction('检查数据完整性', self)
+        check_integrity_act.setStatusTip('检查本地数据是否有缺失，并尝试自动修复')
+        check_integrity_act.triggered.connect(self.check_data_integrity)
+        tools_menu.addAction(check_integrity_act)
+
+    def check_data_integrity(self):
+        """检查数据完整性"""
+        self.log_run("🔍 正在检查数据完整性...")
+        try:
+            missing_periods = self.data_manager.find_missing_periods()
+        except Exception as e:
+             QMessageBox.critical(self, "错误", f"检查失败: {e}")
+             return
+        
+        if not missing_periods:
+            QMessageBox.information(self, "完整性检查", "✅ 本地数据完整，未发现缺失期号。")
+            self.log_run("✅ 数据完整性检查通过，本地数据完整。")
+            return
+            
+        # 限制显示数量，防止弹窗太大
+        display_missing = missing_periods[:50]
+        msg = f"⚠️ 发现 {len(missing_periods)} 个断号缺失:\n\n"
+        msg += ", ".join(map(str, display_missing))
+        if len(missing_periods) > 50:
+            msg += f"\n... 以及其他 {len(missing_periods)-50} 个"
+            
+        msg += "\n\n是否尝试自动修复这些缺失数据？\n(程序将从服务器自动下载缺失记录，可能需要一些时间)"
+        
+        reply = QMessageBox.question(self, "发现缺失数据", msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        
+        if reply == QMessageBox.Yes:
+            self.start_data_repair(missing_periods)
+
+    def start_data_repair(self, missing_periods):
+        """开始数据修复"""
+        if hasattr(self, 'repair_worker') and self.repair_worker.isRunning():
+            QMessageBox.warning(self, "提示", "修复任务正在进行中...")
+            return
+            
+        self.log_run(f"🔧 开始修复 {len(missing_periods)} 条缺失数据...")
+        
+        # 禁用相关按钮防止冲突
+        if hasattr(self, 'btn_sync_profit'): self.btn_sync_profit.setEnabled(False)
+        
+        self.repair_worker = DataRepairWorker(self.data_manager, missing_periods)
+        self.repair_worker.progress_signal.connect(self.log_run)
+        self.repair_worker.finished_signal.connect(self.on_repair_finished)
+        self.repair_worker.start()
+        
+    def on_repair_finished(self, msg):
+        """修复完成回调"""
+        self.log_run(msg)
+        QMessageBox.information(self, "修复完成", msg)
+        
+        # 恢复按钮
+        if hasattr(self, 'btn_sync_profit'): self.btn_sync_profit.setEnabled(True)
+        
+        # 刷新表格
+        self.update_history_table()
+
+# === 全局配置 (放在 import 之后, App 初始化之前) ===
+# 根据运行环境智能配置浏览器引擎参数
+import platform
+
+system_platform = platform.system()
+
+if getattr(sys, 'frozen', False):
+    # 打包后的exe：禁用GPU以保证兼容性（解决部分笔记本黑屏问题）
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer"
+    print("🔧 [打包模式] 已禁用GPU加速（兼容模式）")
+elif system_platform == "Darwin":  # macOS
+    # macOS系统：禁用GPU加速以避免段错误（PyQt5 WebEngine已知问题）
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox --disable-gpu --disable-software-rasterizer --disable-dev-shm-usage"
+    print("🍎 [macOS模式] 已禁用GPU加速（兼容模式，避免段错误）")
+else:
+    # Windows/Linux源码运行：仅禁用沙盒，保留GPU加速（性能模式）
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--no-sandbox"
+    print("🚀 [开发模式] 已启用GPU加速（性能模式）")
+
+if __name__ == "__main__":
+    # 高分屏适配
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps)
+    
+    # OpenGL上下文共享（仅Windows/Linux，macOS上可能导致段错误）
+    if system_platform != "Darwin":
+        QApplication.setAttribute(Qt.AA_ShareOpenGLContexts)
 
 # === 全局配置 (放在 import 之后, App 初始化之前) ===
 # 根据运行环境智能配置浏览器引擎参数

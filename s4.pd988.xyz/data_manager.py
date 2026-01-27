@@ -379,3 +379,75 @@ class CanadaDataManager:
         else:
             print("✅ 本地数据已是最新")
             return True
+
+    def find_missing_periods(self) -> List[int]:
+        """查找本地数据库中缺失的期号 (检查断号)"""
+        all_records = self.db.get_all_records()
+        if not all_records:
+            return []
+            
+        # extract period numbers (index 0 is period_no)
+        periods = [int(r[0]) for r in all_records]
+        periods.sort()
+        
+        missing = []
+        if len(periods) < 2:
+            return missing
+            
+        # Check gaps
+        for i in range(len(periods) - 1):
+            curr = periods[i]
+            next_p = periods[i+1]
+            if next_p - curr > 1:
+                # Found gap (e.g. 100, 102 -> missing 101)
+                for p in range(curr + 1, next_p):
+                    missing.append(p)
+                    
+        return missing
+
+    def fetch_daily_data(self, date_str) -> List[Dict]:
+        """获取指定日期的全部数据 (适配 s4 接口)"""
+        if not self.cookie:
+            return []
+        
+        try:
+            # s4 接口使用 showHistoryLottery
+            url = f"{self.base_url}/page/lottery/showHistoryLottery"
+            payload = {
+                "paramMap.pageNum": 1,
+                "paramMap.pageSize": 500, # 每天约411期，500足够
+                "paramMap.lttnum": date_str
+            }
+            headers = self.headers.copy()
+            headers["Content-Type"] = "application/x-www-form-urlencoded; charset=UTF-8"
+            
+            response = self.session.post(url, data=payload, headers=headers, timeout=15)
+            res_json = response.json()
+            
+            parsed_data = []
+            # s4 返回格式: res_json.get("pageInfo", {}).get("list", [])
+            rows = res_json.get("pageInfo", {}).get("list", [])
+            for row in rows:
+                # s4 字段: num (期号), bt (时间), hundred, ten, one
+                p_no = row.get("num")
+                bt = row.get("bt")
+                h = int(row.get("hundred", 0))
+                t = int(row.get("ten", 0))
+                o = int(row.get("one", 0))
+                r_sum = h + t + o
+                num_str = f"{h}{t}{o}"
+                
+                parsed_data.append({
+                    'overt_at': bt,
+                    'period_no': p_no,
+                    'b': h, 's': t, 'g': o,
+                    'number_overt': num_str,
+                    'result_sum': r_sum,
+                    'is_big_msg': '大' if r_sum >= 14 else '小',
+                    'is_odd_msg': '单' if r_sum % 2 != 0 else '双',
+                    'lhh': '', 'fan': '', 'fan_sum': ''
+                })
+            return parsed_data
+        except Exception as e:
+            print(f"❌ 获取日期 {date_str} 数据失败: {e}")
+            return []
