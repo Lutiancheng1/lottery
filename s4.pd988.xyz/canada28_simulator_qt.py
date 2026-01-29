@@ -1068,9 +1068,20 @@ class Canada28Simulator(QMainWindow):
         
         sync_layout.addWidget(QLabel("同步限制:"))
         self.combo_sync_limit = QComboBox()
-        self.combo_sync_limit.addItems(["10", "25", "50", "100", "1000(全部)"])
+        self.combo_sync_limit.addItems(["10", "25", "50", "100", "300", "1000", "自定义"])
         self.combo_sync_limit.setCurrentIndex(0) # Default 10
         sync_layout.addWidget(self.combo_sync_limit)
+        
+        self.spin_sync_custom = QSpinBox()
+        self.spin_sync_custom.setRange(1, 10000)
+        self.spin_sync_custom.setValue(1000)
+        self.spin_sync_custom.setVisible(False) # 初始隐藏
+        sync_layout.addWidget(self.spin_sync_custom)
+        
+        # 关联切换逻辑
+        self.combo_sync_limit.currentTextChanged.connect(
+            lambda text: self.spin_sync_custom.setVisible(text == "自定义")
+        )
         
         self.btn_sync_profit = QPushButton("同步真实盈亏")
         self.btn_sync_profit.clicked.connect(self.fetch_real_account_history)
