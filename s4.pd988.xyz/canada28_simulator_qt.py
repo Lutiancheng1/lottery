@@ -342,22 +342,14 @@ class AccountSyncWorker(QThread):
                         if detail_json.get("code") == 700:
                             orders = detail_json.get("pageInfo", {}).get("list", [])
                             if orders:
-                                t_bet = 0.0
-                                t_prize = 0.0
-                                u_bet = 0.0
-                                for o in orders:
-                                    # 核心修正：必须除以 SCALE (10000)
-                                    SCALE = 10000.0
-                                    t_bet += float(o.get("amount", 0)) / SCALE
-                                    t_prize += float(o.get("bonus", 0)) / SCALE
-                                    if u_bet == 0: 
-                                        u_bet = float(o.get("amount", 0)) / SCALE
+                                # 核心修正：详情仅用于提取单注金额，不再累加总额（避免分页导致不全）
+                                SCALE = 10000.0
+                                first_order = orders[0]
+                                u_bet = float(first_order.get("amount", 0)) / SCALE
                                 
                                 if p_no in real_bet_results:
-                                    real_bet_results[p_no]['total_bet'] = t_bet
                                     real_bet_results[p_no]['unit_bet'] = u_bet
-                                    real_bet_results[p_no]['win_amount'] = t_prize
-                                    real_bet_results[p_no]['profit'] = t_prize - t_bet
+                                    # 注意：total_bet, win_amount, profit 已经在第一阶段从报表接口获取，这里不再覆盖
                 except:
                     continue
             
