@@ -2091,7 +2091,6 @@ class Canada28Simulator(QMainWindow):
         """保存配置"""
         try:
             config = {
-            config = {
                 # "last_numbers_file" 已废弃
                 "payout": self.spin_payout.value(),
                 "unit_bet": self.spin_unit_bet.value(),
