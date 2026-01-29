@@ -256,12 +256,8 @@ class AccountSyncWorker(QThread):
             real_bet_results = {}
             SCALE = 10000.0 # 新站 1=10000
             
-            # 第一阶段：获取最近的历史报表 (queryOrderHistory)
+            # 第一阶段：获取最近的历史报表 (queryOrderHistory - 支持分页)
             url = f"https://s4.pd988.xyz/queryOrderHistory"
-            payload = {
-                "paramMap.pageNum": 1,
-                "paramMap.pageSize": limit # 使用设置中的限制
-            }
             headers = {
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
                 "X-Requested-With": "XMLHttpRequest",
@@ -269,44 +265,65 @@ class AccountSyncWorker(QThread):
                 "Cookie": self.cookie
             }
             
-            self.progress_signal.emit(f"📡 请求历史报表数据...")
+            current_page = 1
+            PAGE_SIZE = 300 # 官网单次最大建议值
             
-            response = requests.post(url, data=payload, headers=headers, timeout=30)
-            if response.status_code == 200:
-                res_json = response.json()
-                if res_json.get("code") == 700:
-                    data_list = res_json.get("pageInfo", {}).get("list", [])
+            while len(real_bet_results) < limit:
+                self.progress_signal.emit(f"📡 请求历史报表数据 (第 {current_page} 页)...")
+                payload = {
+                    "paramMap.pageNum": current_page,
+                    "paramMap.pageSize": PAGE_SIZE
+                }
+                
+                response = requests.post(url, data=payload, headers=headers, timeout=30)
+                if response.status_code != 200:
+                    self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
+                    break
                     
-                    # 累加盈亏并存储记录
-                    for item in data_list:
-                        p_no = str(item.get("lttNum"))
+                res_json = response.json()
+                if res_json.get("code") != 700:
+                    self.error_signal.emit(f"API错误: {res_json.get('msg')}")
+                    break
+                    
+                page_info = res_json.get("pageInfo", {})
+                data_list = page_info.get("list", [])
+                if not data_list:
+                    break
+                
+                # 累加盈亏并存储记录
+                for item in data_list:
+                    if len(real_bet_results) >= limit:
+                        break
                         
-                        # 转换数值
-                        try:
-                            # 报表接口字段：amounts(总投), bonuss(中奖), yk(盈亏)
-                            total_bet_val = float(item.get("amounts", 0) or 0) / SCALE
-                            win_amount_val = float(item.get("bonuss", 0) or 0) / SCALE
-                            profit_val = float(item.get("yk", 0) or 0) / SCALE
-                        except (ValueError, TypeError):
-                            total_bet_val = 0.0
-                            win_amount_val = 0.0
-                            profit_val = 0.0
- 
-                        if p_no not in real_bet_results:
-                            real_bet_results[p_no] = {
-                                'total_bet': total_bet_val,
-                                'unit_bet': 0.0, 
-                                'win_amount': win_amount_val,
-                                'profit': profit_val,
-                                'total_profit': 0.0,
-                                'is_real': True
-                            }
-                        
+                    p_no = str(item.get("lttNum"))
+                    
+                    # 转换数值
+                    try:
+                        # 报表接口字段：amounts(总投), bonuss(中奖), yk(盈亏)
+                        total_bet_val = float(item.get("amounts", 0) or 0) / SCALE
+                        win_amount_val = float(item.get("bonuss", 0) or 0) / SCALE
+                        profit_val = float(item.get("yk", 0) or 0) / SCALE
+                    except (ValueError, TypeError):
+                        total_bet_val = 0.0
+                        win_amount_val = 0.0
+                        profit_val = 0.0
+    
+                    if p_no not in real_bet_results:
+                        real_bet_results[p_no] = {
+                            'total_bet': total_bet_val,
+                            'unit_bet': 0.0, 
+                            'win_amount': win_amount_val,
+                            'profit': profit_val,
+                            'total_profit': 0.0,
+                            'is_real': True
+                        }
                         total_profit += profit_val
-                else:
-                     self.error_signal.emit(f"API错误: {res_json.get('msg')}")
-            else:
-                 self.error_signal.emit(f"请求失败: HTTP {response.status_code}")
+
+                # 检查是否还有下一页
+                page_count = page_info.get("pageCount", 1)
+                if current_page >= page_count:
+                    break
+                current_page += 1
                 
             # 第二阶段：获取最近N期的详细明细
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
