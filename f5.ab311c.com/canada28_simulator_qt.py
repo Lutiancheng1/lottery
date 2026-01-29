@@ -3249,15 +3249,16 @@ class Canada28Simulator(QMainWindow):
                     # 只有当这是新的一期时，才去同步完整历史数据并计算
                     print(f"🔔 检测到新开奖: {last_period} -> {last_result}")
                     
-                    # 使用后台线程同步（避免UI阻塞）
+                    # 1. 启动后台同步（用于更新本地数据库和历史表格）
                     self.start_background_sync()
                     
-                    # 获取完整的本地数据来处理 (因为 p_period 信息不全，缺赔率等)
-                    latest_local = self.data_manager.get_local_latest()
-                    if latest_local and latest_local.get('period_no') == last_period:
-                        if self.is_running:
-                            self.process_new_draw(latest_local)
-                        self.update_history_table()
+                    # 2. 核心修正：直接使用实时获取到的上期结果进行算账，不再等待数据库同步
+                    # 这样可以确保在同一轮刷新中完成“算账”和“下期下单”，消除一期的延迟
+                    if self.is_running:
+                        self.process_new_draw(p_period)
+                    
+                    # 3. 刷新表格
+                    self.update_history_table()
         
             # === 自动投注检查 (Polling) ===
             # 移除了 process_new_draw 中的立即下单，改为在此处轮询检查
