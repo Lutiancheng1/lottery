@@ -516,6 +516,9 @@ class BacktestWorker(QThread):
                             if decrease_rate > 0:
                                 current_unit_bet = current_unit_bet * (1 - decrease_rate)
                                 
+                            # 核心修改：加入精度对齐
+                            current_unit_bet = round(current_unit_bet, 2)
+                                
                             # 3. 兜底: 不能低于底注
                             if current_unit_bet < base_unit_bet:
                                 current_unit_bet = base_unit_bet
@@ -526,6 +529,7 @@ class BacktestWorker(QThread):
                     else:
                         # 无债状态：递减 (且不能低于底注)
                         current_unit_bet = current_unit_bet * (1 - decrease_rate)
+                        current_unit_bet = round(current_unit_bet, 2)
                         if current_unit_bet < base_unit_bet: current_unit_bet = base_unit_bet
                         if current_unit_bet < 0.1: current_unit_bet = 0.1
                 else:
@@ -535,6 +539,7 @@ class BacktestWorker(QThread):
                     
                     fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
                     current_unit_bet = current_unit_bet * (1 + increase_rate) + fixed_per_code
+                    current_unit_bet = round(current_unit_bet, 2)
                     
                     # 检查最高单注限制
                     if enable_max_bet_limit and current_unit_bet > max_unit_bet_val:
@@ -751,6 +756,10 @@ class Canada28Simulator(QMainWindow):
         self.current_debt = 0.0  # 当前累计欠款 (逐期回本模式)
         self.base_bet_memory = 2.0 # 记忆初始底注
         self.last_failed_cookie = "" # 记录上次验证失败的Cookie，防止重复验证
+        
+        # 内存资金状态 (脱离UI计算)
+        self.current_unit_bet = 0.1
+        self.base_unit_bet = 0.1
         
         # 封盘等待时间统计
         self.closed_start_time = None
@@ -3037,9 +3046,13 @@ class Canada28Simulator(QMainWindow):
             self.is_running = True
             # 重置首次确认标记
             self.first_bet_confirmed = False
-            # 记忆当前注码作为底注
-            self.base_bet_memory = self.spin_unit_bet.value()
-            self.log_run(f"🏁 开始运行，设定回本底注为: {self.base_bet_memory}")
+            
+            # 核心修改：启动时快照 UI 参数到内存变量
+            self.base_unit_bet = self.spin_unit_bet.value()
+            self.current_unit_bet = self.base_unit_bet
+            self.base_bet_memory = self.base_unit_bet # 保持兼容性
+            
+            self.log_run(f"🏁 开始运行，设定初始底注为: {self.base_unit_bet:.2f}")
             self.update_start_button_text()
             
             # === 移除立即检查，统一由 polling loop 处理 (避免重复弹窗) ===
@@ -3307,7 +3320,8 @@ class Canada28Simulator(QMainWindow):
                     # 检查是否已对该期下注
                     # 注意: last_bet_period 需要是字符串比较
                     if str(current_period) != getattr(self, 'last_bet_period', None):
-                        unit_bet = self.spin_unit_bet.value()
+                        # 核心修改：使用内存变量下单，而不是读取 UI
+                        unit_bet = self.current_unit_bet
                         
                         if self.chk_real_bet.isChecked():
                             self.place_real_bet(str(current_period), unit_bet)
@@ -4317,7 +4331,7 @@ class Canada28Simulator(QMainWindow):
             self.min_profit_period = period
             self.lbl_min_profit.setText(f"{profit:.2f} (第{period}期)")
         
-        # 6. 动态注码调整 (金额回本策略)
+        # 6. 动态注码调整 (金额回本策略 - 使用内存变量计算)
         if is_win:
             # 赢了：先还债
             if self.current_debt > 0:
@@ -4327,56 +4341,57 @@ class Canada28Simulator(QMainWindow):
                 if self.current_debt > 0:
                     self.log_run(f"🛡️ 赢且回血: 本期赢 {profit:.2f}, 剩余欠款 {self.current_debt:.2f}")
                     
-                    # 赢了也要递减 (D'Alembert策略 / 用户要求的阶梯回落)
+                    # 赢了也要递减
                     increase_fixed = self.spin_increase_fixed.value()
                     decrease_rate = self.spin_decrease_rate.value() / 100.0
                     
-                    new_unit_bet = unit_bet
+                    # 使用内存变量计算
+                    new_unit_bet = self.current_unit_bet
                     
                     # 1. 扣除固定加注部分
                     fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
                     if fixed_per_code > 0:
                         new_unit_bet -= fixed_per_code
                         
-                    # 2. 扣除比例递减 (如果设置了赢-递减)
+                    # 2. 扣除比例递减
                     if decrease_rate > 0:
                         new_unit_bet = new_unit_bet * (1 - decrease_rate)
                         
-                    # 3. 兜底: 不能低于底注
-                    if new_unit_bet < self.base_bet_memory:
-                        new_unit_bet = self.base_bet_memory
-                    if new_unit_bet < 0.1: new_unit_bet = 0.1 # 硬底
+                    # 3. 精度对齐与底注保护
+                    new_unit_bet = round(new_unit_bet, 2)
+                    if new_unit_bet < self.base_unit_bet:
+                        new_unit_bet = self.base_unit_bet
+                    if new_unit_bet < 0.1: new_unit_bet = 0.1 
                     
-                    self.spin_unit_bet.setValue(new_unit_bet)
-                    # self.log_run(f"   ↳ 注码回落至: {new_unit_bet:.2f}")
+                    self.current_unit_bet = new_unit_bet
                 else:
                     # 债还清了，重置回底注
-                    self.log_run(f"🎉 欠款已还清! 注码重置回 {self.base_bet_memory:.2f}")
-                    self.spin_unit_bet.setValue(self.base_bet_memory)
+                    self.log_run(f"🎉 欠款已还清! 注码重置回 {self.base_unit_bet:.2f}")
+                    self.current_unit_bet = self.base_unit_bet
             else:
                 # 本来就没债，正常递减或保持底注
                 decrease_rate = self.spin_decrease_rate.value() / 100.0
-                new_unit_bet = unit_bet * (1 - decrease_rate)
-                # 不能低于底注
-                if new_unit_bet < self.base_bet_memory: new_unit_bet = self.base_bet_memory
+                new_unit_bet = self.current_unit_bet * (1 - decrease_rate)
+                new_unit_bet = round(new_unit_bet, 2)
+                
+                if new_unit_bet < self.base_unit_bet: 
+                    new_unit_bet = self.base_unit_bet
                 if new_unit_bet < 0.1: new_unit_bet = 0.1
                 
-                self.spin_unit_bet.setValue(new_unit_bet)
-                # self.log_run(f"📉 赢且递减: {unit_bet:.2f} -> {new_unit_bet:.2f}")
+                self.current_unit_bet = new_unit_bet
         else:
             # 输了：记账并递增
-            # profit是负数, abs(profit)是亏损额
             loss_amount = abs(profit)
             self.current_debt += loss_amount
             
             increase_rate = self.spin_increase_rate.value() / 100.0
             increase_fixed = self.spin_increase_fixed.value()
             
-            # 计算新的总投入目标
             fixed_per_code = increase_fixed / len(self.my_numbers) if self.my_numbers else 0
-            new_unit_bet = unit_bet * (1 + increase_rate) + fixed_per_code
+            new_unit_bet = self.current_unit_bet * (1 + increase_rate) + fixed_per_code
+            new_unit_bet = round(new_unit_bet, 2)
             
-            self.log_run(f"📈 输且递增: {unit_bet:.2f} -> {new_unit_bet:.2f} (新增欠款 {loss_amount:.2f} -> 总欠 {self.current_debt:.2f})")
+            self.log_run(f"📈 输且递增: {self.current_unit_bet:.2f} -> {new_unit_bet:.2f} (新增欠款 {loss_amount:.2f} -> 总欠 {self.current_debt:.2f})")
             
             # 检查最高单注限制
             if self.chk_max_unit_bet.isChecked():
@@ -4385,7 +4400,12 @@ class Canada28Simulator(QMainWindow):
                     new_unit_bet = max_val
                     self.log_run(f"⚠️ 触发最高单注限制: {max_val}")
             
-            self.spin_unit_bet.setValue(new_unit_bet)
+            self.current_unit_bet = new_unit_bet
+            
+        # 最后同步更新 UI 显示，但不作为计算源
+        self.spin_unit_bet.blockSignals(True) # 暂时阻塞信号，防止触发 on_param_changed
+        self.spin_unit_bet.setValue(self.current_unit_bet)
+        self.spin_unit_bet.blockSignals(False)
             
         # 更新欠款状态显示
         if not getattr(self, 'viewing_backtest_mode', False):
