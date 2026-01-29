@@ -360,10 +360,11 @@ class AccountSyncWorker(QThread):
                             break
                             
                         for o in orders:
-                            # 详情接口返回的 amount/bonus 已经是 UI 单位 (如 6.0)，不需要除以 SCALE
-                            amt = float(o.get("amount", 0))
+                            # 详情接口返回的 amount/bonus 仍需除以 SCALE (10000)
+                            SCALE = 10000.0
+                            amt = float(o.get("amount", 0)) / SCALE
                             p_bet += amt
-                            p_win += float(o.get("bonus", 0))
+                            p_win += float(o.get("bonus", 0)) / SCALE
                             if u_bet == 0: u_bet = amt
                             
                         # 检查详情是否有下一页
@@ -4709,44 +4710,64 @@ class Canada28Simulator(QMainWindow):
         self.log_run(f"🔍 正在查询第 {period_no} 期下单详情...")
         
         try:
-            url = f"https://s4.pd988.xyz/queryOrderDetail"
-            payload = {
-                "paramMap.lttnum": str(period_no)
-            }
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-                "X-Requested-With": "XMLHttpRequest",
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Cookie": self.cookie
-            }
-            
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            if response.status_code != 200:
-                self.log_run(f"❌ 查询详情失败: HTTP {response.status_code}")
-                return
-                
+            all_orders = []
+            detail_page = 1
             SCALE = 10000.0
-            res_json = response.json()
-            if res_json.get("code") != 700:
-                self.log_run(f"ℹ️ 未查询到详情: {res_json.get('msg')}")
-                QMessageBox.information(self, f"第 {period_no} 期详情", "未查询到该期下单详情")
-                return
+            
+            while True:
+                url = f"https://s4.pd988.xyz/queryOrderDetail"
+                payload = {
+                    "paramMap.lttnum": str(period_no),
+                    "paramMap.pageNum": detail_page,
+                    "paramMap.pageSize": 300
+                }
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Cookie": self.cookie
+                }
                 
-            orders = res_json.get("pageInfo", {}).get("list", [])
-            if not orders:
-                QMessageBox.information(self, f"第 {period_no} 期详情", "该期无下单记录")
+                # 核心修正：使用 data=payload 而不是 json=payload
+                response = requests.post(url, data=payload, headers=headers, timeout=15)
+                if response.status_code != 200:
+                    self.log_run(f"❌ 查询详情失败: HTTP {response.status_code}")
+                    break
+                    
+                res_json = response.json()
+                if res_json.get("code") != 700:
+                    if detail_page == 1:
+                        self.log_run(f"ℹ️ 未查询到详情: {res_json.get('msg')}")
+                        QMessageBox.information(self, f"第 {period_no} 期详情", "未查询到该期下单详情")
+                    break
+                    
+                page_info = res_json.get("pageInfo", {})
+                orders = page_info.get("list", [])
+                if not orders:
+                    break
+                    
+                all_orders.extend(orders)
+                
+                # 检查是否有下一页
+                if detail_page >= page_info.get("pageCount", 1):
+                    break
+                detail_page += 1
+                
+            if not all_orders:
+                if detail_page == 1: # 只有第一页就没数据才弹窗
+                    QMessageBox.information(self, f"第 {period_no} 期详情", "该期无下单记录")
                 return
                 
             # 构造详情文本
             detail_text = f"<h3>第 {period_no} 期下单详情</h3>"
-            detail_text += f"<p>共查询到 {len(orders)} 条记录</p>"
+            detail_text += f"<p>共查询到 {len(all_orders)} 条记录</p>"
             detail_text += "<table border='1' cellpadding='4' cellspacing='0' style='border-collapse: collapse; width: 100%;'>"
             detail_text += "<tr style='background-color: #f0f0f0;'><th>号码</th><th>单注</th><th>赔率</th><th>投入</th><th>结果</th><th>时间</th></tr>"
             
             total_bet = 0.0
             total_prize = 0.0
             
-            for o in orders:
+            for o in all_orders:
                 num = o.get("num", "")
                 unit = float(o.get("amount", "0")) / SCALE
                 odds = float(o.get("odds", "0")) / SCALE
