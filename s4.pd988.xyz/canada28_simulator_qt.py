@@ -298,10 +298,11 @@ class AccountSyncWorker(QThread):
                     # 转换数值
                     try:
                         # 报表接口字段：amounts(总投), bonuss(中奖), yk(盈亏)
-                        # 核心修改：移除 / SCALE，因为 API 返回的已经是 UI 单位
-                        total_bet_val = float(item.get("amounts", 0) or 0)
-                        win_amount_val = float(item.get("bonuss", 0) or 0)
-                        profit_val = float(item.get("yk", 0) or 0)
+                        # 核心修正：必须除以 SCALE (10000)，因为 API 返回的是 0.0001 单位
+                        SCALE = 10000.0
+                        total_bet_val = float(item.get("amounts", 0) or 0) / SCALE
+                        win_amount_val = float(item.get("bonuss", 0) or 0) / SCALE
+                        profit_val = float(item.get("yk", 0) or 0) / SCALE
                     except (ValueError, TypeError):
                         total_bet_val = 0.0
                         win_amount_val = 0.0
@@ -345,11 +346,12 @@ class AccountSyncWorker(QThread):
                                 t_prize = 0.0
                                 u_bet = 0.0
                                 for o in orders:
-                                    # 核心修改：移除 / SCALE
-                                    t_bet += float(o.get("amount", 0))
-                                    t_prize += float(o.get("bonus", 0))
+                                    # 核心修正：必须除以 SCALE (10000)
+                                    SCALE = 10000.0
+                                    t_bet += float(o.get("amount", 0)) / SCALE
+                                    t_prize += float(o.get("bonus", 0)) / SCALE
                                     if u_bet == 0: 
-                                        u_bet = float(o.get("amount", 0))
+                                        u_bet = float(o.get("amount", 0)) / SCALE
                                 
                                 if p_no in real_bet_results:
                                     real_bet_results[p_no]['total_bet'] = t_bet
