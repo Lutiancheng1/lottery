@@ -782,6 +782,10 @@ class Canada28Simulator(QMainWindow):
         self.closed_start_time = None
         self.last_closed_period = None
         
+        # 历史记录分页状态
+        self.current_page = 1
+        self.page_size = 50
+        
         # 性能优化：添加请求状态标志，防止并发请求导致UI卡顿
         self.is_refreshing_data = False  # 防止refresh_data并发调用
         
@@ -2006,9 +2010,74 @@ class Canada28Simulator(QMainWindow):
         self.table.cellClicked.connect(self.on_table_cell_clicked) # 连接点击事件
         
         layout.addWidget(self.table)
+        
+        # --- 分页控制栏 ---
+        pagination_layout = QHBoxLayout()
+        
+        self.btn_prev_page = QPushButton("上一页")
+        self.btn_prev_page.clicked.connect(self.on_prev_page)
+        pagination_layout.addWidget(self.btn_prev_page)
+        
+        self.lbl_page_info = QLabel("第 1 / 1 页")
+        self.lbl_page_info.setAlignment(Qt.AlignCenter)
+        self.lbl_page_info.setMinimumWidth(100)
+        pagination_layout.addWidget(self.lbl_page_info)
+        
+        self.btn_next_page = QPushButton("下一页")
+        self.btn_next_page.clicked.connect(self.on_next_page)
+        pagination_layout.addWidget(self.btn_next_page)
+        
+        pagination_layout.addSpacing(20)
+        
+        pagination_layout.addWidget(QLabel("跳转到:"))
+        self.spin_page_jump = QSpinBox()
+        self.spin_page_jump.setRange(1, 1)
+        self.spin_page_jump.setFixedWidth(60)
+        pagination_layout.addWidget(self.spin_page_jump)
+        
+        btn_jump = QPushButton("前往")
+        btn_jump.clicked.connect(self.on_jump_page)
+        pagination_layout.addWidget(btn_jump)
+        
+        pagination_layout.addStretch()
+        
+        pagination_layout.addWidget(QLabel("每页显示:"))
+        self.combo_page_size = QComboBox()
+        self.combo_page_size.addItems(["20", "50", "100", "200", "500"])
+        self.combo_page_size.setCurrentText("50")
+        self.combo_page_size.currentTextChanged.connect(self.on_page_size_changed)
+        pagination_layout.addWidget(self.combo_page_size)
+        
+        layout.addLayout(pagination_layout)
         group = self.history_panel_group
         group.setLayout(layout)
         # self.simulator_layout.addWidget(group) # 移交init_ui管理
+
+    def on_prev_page(self):
+        """上一页"""
+        if self.current_page > 1:
+            self.current_page -= 1
+            self.update_history_table()
+
+    def on_next_page(self):
+        """下一页"""
+        # 总页数在 update_history_table 中计算
+        self.current_page += 1
+        self.update_history_table()
+
+    def on_jump_page(self):
+        """跳转页码"""
+        self.current_page = self.spin_page_jump.value()
+        self.update_history_table()
+
+    def on_page_size_changed(self, text):
+        """调整每页显示数量"""
+        try:
+            self.page_size = int(text)
+            self.current_page = 1 # 重置到第一页
+            self.update_history_table()
+        except:
+            pass
         
     # === 浏览器相关功能 ===
     
@@ -4461,28 +4530,67 @@ class Canada28Simulator(QMainWindow):
             self.fetch_real_account_history()
         
     def update_history_table(self):
-        """更新历史记录表格"""
+        """更新历史记录表格 (支持分页)"""
         # 如果处于回测视图模式，停止更新表格 (保持回测结果显示)
         if getattr(self, 'viewing_backtest_mode', False):
             return
 
         data_list = self.data_manager.read_all_local_data()
-        
+        if not data_list:
+            return
+            
         # 顺便更新冷门导出界面的提示信息
-        if hasattr(self, 'lbl_cold_hint') and data_list:
+        if hasattr(self, 'lbl_cold_hint'):
             count = len(data_list)
             self.lbl_cold_hint.setText(f"(库内共 {count} 期, 日均≈402)")
             
         # 顺便更新极值和胜率
         self.update_stats_values()
         
-        # 只显示最近50期
-        recent_data = data_list[-50:]
-        recent_data.reverse() # 最新在最上面
+        # --- 分页逻辑 ---
+        total_count = len(data_list)
+        total_pages = max(1, (total_count + self.page_size - 1) // self.page_size)
         
-        self.table.setRowCount(len(recent_data))
-        for row, data in enumerate(recent_data):
-            period = data.get('period_no', '')
+        # 边界检查
+        if self.current_page > total_pages:
+            self.current_page = total_pages
+        if self.current_page < 1:
+            self.current_page = 1
+            
+        # 更新分页 UI 状态
+        self.lbl_page_info.setText(f"第 {self.current_page} / {total_pages} 页 (共 {total_count} 期)")
+        self.btn_prev_page.setEnabled(self.current_page > 1)
+        self.btn_next_page.setEnabled(self.current_page < total_pages)
+        self.spin_page_jump.setRange(1, total_pages)
+        self.spin_page_jump.setValue(self.current_page)
+        
+        # --- 预计算累计盈亏 (确保分页后数据依然准确) ---
+        cumulative_profits = {}
+        running_total = 0.0
+        # 按照期号从小到大排序计算 (data_list 通常已经是正序，但为了保险排序一次)
+        sorted_data = sorted(data_list, key=lambda x: str(x.get('period_no', '')))
+        for d in sorted_data:
+            p = str(d.get('period_no'))
+            p_profit = 0.0
+            # 查找该期是否有真实盈亏记录
+            if hasattr(self, 'real_bet_results') and p in self.real_bet_results:
+                p_profit = self.real_bet_results[p].get('profit', 0.0)
+            elif hasattr(self, 'bet_results') and p in self.bet_results:
+                if self.bet_results[p].get('is_real'):
+                    p_profit = self.bet_results[p].get('profit', 0.0)
+            
+            running_total += p_profit
+            cumulative_profits[p] = running_total
+
+        # --- 数据切片 (最新在最上面) ---
+        all_data_reversed = data_list[::-1]
+        start_idx = (self.current_page - 1) * self.page_size
+        end_idx = start_idx + self.page_size
+        page_data = all_data_reversed[start_idx:end_idx]
+        
+        self.table.setRowCount(len(page_data))
+        for row, data in enumerate(page_data):
+            period = str(data.get('period_no', ''))
             period_item = QTableWidgetItem(period)
             
             # 检查是否有真实投注记录，如果有则高亮
@@ -4500,21 +4608,19 @@ class Canada28Simulator(QMainWindow):
                 
             self.table.setItem(row, 0, period_item)
             
-            # 优化时间显示：添加Tooltip并调整列宽
+            # 优化时间显示
             time_str = data.get('overt_at', '')
             time_item = QTableWidgetItem(time_str)
-            time_item.setToolTip(time_str) # 鼠标悬浮显示完整时间
+            time_item.setToolTip(time_str)
             self.table.setItem(row, 1, time_item)
             
             # 开奖号码
             self.table.setItem(row, 2, QTableWidgetItem(data.get('number_overt', '')))
             
             # 盈亏数据显示逻辑
-            # 优先显示真实账单 (从API同步回来的)
             res = None
             if hasattr(self, 'real_bet_results') and period in self.real_bet_results:
-                res = self.real_bet_results[period].copy() # 复制一份避免修改原数据
-                # 尝试从本地记录补全单注信息
+                res = self.real_bet_results[period].copy()
                 if hasattr(self, 'bet_results') and period in self.bet_results:
                     local_res = self.bet_results[period]
                     if res.get('unit_bet', 0) == 0:
@@ -4522,57 +4628,39 @@ class Canada28Simulator(QMainWindow):
             elif hasattr(self, 'bet_results') and period in self.bet_results:
                 res = self.bet_results[period]
             
-            if res:
-                # 只有真实投注或同步回来的真实账单才显示在表格中
-                if res.get('is_real', False):
-                    # 投入 (总投注额)
-                    self.table.setItem(row, 3, QTableWidgetItem(f"{res.get('total_bet', 0.0):.2f}"))
-                    
-                    # 单注
-                    u_bet = res.get('unit_bet', 0.0)
-                    u_bet_str = f"{u_bet:.2f}" if u_bet > 0 else "--"
-                    self.table.setItem(row, 4, QTableWidgetItem(u_bet_str))
-                    
-                    # 结果 (中奖金额)
-                    self.table.setItem(row, 5, QTableWidgetItem(f"{res.get('win_amount', 0.0):.2f}"))
-                    
-                    # 盈亏
-                    pl = res.get('profit', 0.0)
-                    pl_item = QTableWidgetItem(f"{pl:.2f}")
-                    if pl > 0:
-                        pl_item.setForeground(QColor('red'))
-                    elif pl < 0:
-                        pl_item.setForeground(QColor('green'))
-                    self.table.setItem(row, 6, pl_item)
-                    
-                    # 累计盈亏 (动态计算：从当前行往后累加所有真实盈亏)
-                    # 因为表格是倒序显示，所以需要累加当前行及之后所有行的盈亏
-                    total_pl = 0.0
-                    for i in range(row, len(recent_data)):
-                        p_i = recent_data[i].get('period_no', '')
-                        r_i = None
-                        if hasattr(self, 'real_bet_results') and p_i in self.real_bet_results:
-                            r_i = self.real_bet_results[p_i]
-                        elif hasattr(self, 'bet_results') and p_i in self.bet_results:
-                            r_i = self.bet_results[p_i]
-                        
-                        if r_i and r_i.get('is_real'):
-                            total_pl += r_i.get('profit', 0.0)
-                    
-                    total_item = QTableWidgetItem(f"{total_pl:.2f}")
-                    if total_pl > 0:
-                        total_item.setForeground(QColor('red'))
-                    elif total_pl < 0:
-                        total_item.setForeground(QColor('green'))
-                    self.table.setItem(row, 7, total_item)
-                else:
-                    # 模拟数据，清空或显示 --
-                    for col in range(3, 8):
-                        self.table.setItem(row, col, QTableWidgetItem("--"))
+            if res and res.get('is_real', False):
+                # 投入 (总投注额)
+                self.table.setItem(row, 3, QTableWidgetItem(f"{res.get('total_bet', 0.0):.2f}"))
+                
+                # 单注
+                u_bet = res.get('unit_bet', 0.0)
+                u_bet_str = f"{u_bet:.2f}" if u_bet > 0 else "--"
+                self.table.setItem(row, 4, QTableWidgetItem(u_bet_str))
+                
+                # 结果 (中奖金额)
+                self.table.setItem(row, 5, QTableWidgetItem(f"{res.get('win_amount', 0.0):.2f}"))
+                
+                # 盈亏
+                pl = res.get('profit', 0.0)
+                pl_item = QTableWidgetItem(f"{pl:.2f}")
+                if pl > 0:
+                    pl_item.setForeground(QColor('red'))
+                elif pl < 0:
+                    pl_item.setForeground(QColor('green'))
+                self.table.setItem(row, 6, pl_item)
+                
+                # 累计盈亏 (使用预计算的结果)
+                total_pl = cumulative_profits.get(period, 0.0)
+                total_pl_item = QTableWidgetItem(f"{total_pl:.2f}")
+                if total_pl > 0:
+                    total_pl_item.setForeground(QColor('red'))
+                elif total_pl < 0:
+                    total_pl_item.setForeground(QColor('green'))
+                self.table.setItem(row, 7, total_pl_item)
             else:
-                # 无投注记录
-                for c in range(3, 8):
-                    self.table.setItem(row, c, QTableWidgetItem("--"))
+                # 非真实投注行，清空盈亏相关列
+                for col in range(3, 8):
+                    self.table.setItem(row, col, QTableWidgetItem("--"))
 
     def on_table_cell_clicked(self, row, col):
         """表格点击事件"""
