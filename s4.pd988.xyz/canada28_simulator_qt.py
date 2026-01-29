@@ -1989,72 +1989,56 @@ class Canada28Simulator(QMainWindow):
         """创建历史记录表格"""
         self.history_panel_group = QGroupBox("历史记录")
         layout = QVBoxLayout()
-        layout.setContentsMargins(5, 5, 5, 5) # 紧凑布局
-        layout.setSpacing(2)
         
-        # --- 顶部控制与说明栏 (容器高度 40px) ---
-        top_bar_container = QFrame()
-        top_bar_container.setFixedHeight(40) # 增加容器高度到 40px，确保内部控件有充足空间对齐
-        top_bar_container.setStyleSheet("QFrame { border: none; }")
-        top_bar_layout = QHBoxLayout(top_bar_container)
-        top_bar_layout.setContentsMargins(0, 0, 0, 0)
-        top_bar_layout.setSpacing(8)
-        
+        # --- 顶部控制与说明栏 ---
+        top_bar_layout = QHBoxLayout()
         # 添加说明标签
         self.lbl_table_info = QLabel("📊 历史投注记录")
-        self.lbl_table_info.setStyleSheet("color: #666; font-size: 11px;")
-        top_bar_layout.addWidget(self.lbl_table_info, 0, Qt.AlignVCenter)
+        self.lbl_table_info.setStyleSheet("color: #666; font-size: 11px; font-weight: bold;")
+        top_bar_layout.addWidget(self.lbl_table_info)
         
         top_bar_layout.addStretch()
         
-        # --- 分页控制 (控件高度恢复 24px，容器 40px 居中) ---
-        common_height = 24
-        btn_style = f"font-size: 12px; height: {common_height}px;"
-        
-        self.btn_prev_page = QPushButton("<")
-        self.btn_prev_page.setFixedSize(30, common_height)
+        # --- 分页控制 (移至顶部) ---
+        self.btn_prev_page = QPushButton("⬅️")
+        self.btn_prev_page.setFixedWidth(40)
         self.btn_prev_page.setToolTip("上一页")
-        self.btn_prev_page.setStyleSheet(btn_style)
         self.btn_prev_page.clicked.connect(self.on_prev_page)
-        top_bar_layout.addWidget(self.btn_prev_page, 0, Qt.AlignVCenter)
+        top_bar_layout.addWidget(self.btn_prev_page)
         
         self.lbl_page_info = QLabel("第 1 / 1 页")
-        self.lbl_page_info.setStyleSheet(f"font-size: 11px; color: #333; padding: 0 5px;")
+        self.lbl_page_info.setStyleSheet("font-size: 11px; color: #333;")
+        self.lbl_page_info.setAlignment(Qt.AlignCenter)
         top_bar_layout.addWidget(self.lbl_page_info, 0, Qt.AlignVCenter)
         
-        self.btn_next_page = QPushButton(">")
-        self.btn_next_page.setFixedSize(30, common_height)
+        self.btn_next_page = QPushButton("➡️")
+        self.btn_next_page.setFixedWidth(40)
         self.btn_next_page.setToolTip("下一页")
-        self.btn_next_page.setStyleSheet(btn_style)
         self.btn_next_page.clicked.connect(self.on_next_page)
-        top_bar_layout.addWidget(self.btn_next_page, 0, Qt.AlignVCenter)
-        
-        top_bar_layout.addSpacing(5)
+        top_bar_layout.addWidget(self.btn_next_page)
+ 
         
         self.spin_page_jump = QSpinBox()
         self.spin_page_jump.setRange(1, 1)
-        self.spin_page_jump.setFixedSize(45, common_height)
-        self.spin_page_jump.setStyleSheet(f"font-size: 11px; height: {common_height}px;")
-        self.spin_page_jump.setAlignment(Qt.AlignCenter)
-        top_bar_layout.addWidget(self.spin_page_jump, 0, Qt.AlignVCenter)
+        self.spin_page_jump.setFixedWidth(50)
+        self.spin_page_jump.setStyleSheet("font-size: 11px;")
+        top_bar_layout.addWidget(self.spin_page_jump)
         
         btn_jump = QPushButton("跳转")
-        btn_jump.setFixedSize(45, common_height)
-        btn_jump.setStyleSheet(btn_style)
+        btn_jump.setFixedWidth(55)
+        btn_jump.setStyleSheet("font-size: 11px;")
         btn_jump.clicked.connect(self.on_jump_page)
         top_bar_layout.addWidget(btn_jump, 0, Qt.AlignVCenter)
-        
-        top_bar_layout.addSpacing(5)
         
         self.combo_page_size = QComboBox()
         self.combo_page_size.addItems(["20", "50", "100", "200", "500"])
         self.combo_page_size.setCurrentText("50")
-        self.combo_page_size.setFixedSize(55, common_height)
-        self.combo_page_size.setStyleSheet(f"font-size: 11px; height: {common_height}px;")
+        self.combo_page_size.setFixedWidth(60)
+        self.combo_page_size.setStyleSheet("font-size: 11px;")
         self.combo_page_size.currentTextChanged.connect(self.on_page_size_changed)
         top_bar_layout.addWidget(self.combo_page_size, 0, Qt.AlignVCenter)
         
-        layout.addWidget(top_bar_container)
+        layout.addLayout(top_bar_layout)
         
         self.table = QTableWidget()
         self.table.setColumnCount(8)
