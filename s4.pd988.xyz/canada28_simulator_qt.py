@@ -310,14 +310,13 @@ class AccountSyncWorker(QThread):
     
                     if p_no not in real_bet_results:
                         real_bet_results[p_no] = {
-                            'total_bet': total_bet_val,
+                            'total_bet': 0.0,
                             'unit_bet': 0.0, 
-                            'win_amount': win_amount_val,
-                            'profit': profit_val,
+                            'win_amount': 0.0,
+                            'profit': 0.0,
                             'total_profit': 0.0,
                             'is_real': True
                         }
-                        total_profit += profit_val
 
                 # 检查是否还有下一页
                 page_count = page_info.get("pageCount", 1)
@@ -325,32 +324,63 @@ class AccountSyncWorker(QThread):
                     break
                 current_page += 1
                 
-            # 第二阶段：获取最近N期的详细明细
+            # 第二阶段：获取最近N期的详细明细 (支持分页获取完整注单)
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
             
-            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:limit] # 遵循用户设置的限制
+            total_profit = 0.0 # 重新从详情累加，确保绝对准确
+            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:limit]
+            
             for idx, p_no in enumerate(recent_periods):
                 try:
                     self.progress_signal.emit(f"🔍 获取第{p_no}期明细 ({idx+1}/{len(recent_periods)})")
-                    detail_url = f"https://s4.pd988.xyz/queryOrderDetail"
-                    detail_payload = {
-                        "paramMap.lttnum": str(p_no)
-                    }
-                    detail_res = requests.post(detail_url, data=detail_payload, headers=headers, timeout=15)
-                    if detail_res.status_code == 200:
+                    
+                    p_bet = 0.0
+                    p_win = 0.0
+                    u_bet = 0.0
+                    detail_page = 1
+                    
+                    while True:
+                        detail_url = f"https://s4.pd988.xyz/queryOrderDetail"
+                        detail_payload = {
+                            "paramMap.lttnum": str(p_no),
+                            "paramMap.pageNum": detail_page,
+                            "paramMap.pageSize": 300
+                        }
+                        detail_res = requests.post(detail_url, data=detail_payload, headers=headers, timeout=15)
+                        if detail_res.status_code != 200:
+                            break
+                            
                         detail_json = detail_res.json()
-                        if detail_json.get("code") == 700:
-                            orders = detail_json.get("pageInfo", {}).get("list", [])
-                            if orders:
-                                # 核心修正：详情仅用于提取单注金额，不再累加总额（避免分页导致不全）
-                                SCALE = 10000.0
-                                first_order = orders[0]
-                                u_bet = float(first_order.get("amount", 0)) / SCALE
-                                
-                                if p_no in real_bet_results:
-                                    real_bet_results[p_no]['unit_bet'] = u_bet
-                                    # 注意：total_bet, win_amount, profit 已经在第一阶段从报表接口获取，这里不再覆盖
-                except:
+                        if detail_json.get("code") != 700:
+                            break
+                            
+                        page_info = detail_json.get("pageInfo", {})
+                        orders = page_info.get("list", [])
+                        if not orders:
+                            break
+                            
+                        for o in orders:
+                            # 详情接口返回的 amount/bonus 已经是 UI 单位 (如 6.0)，不需要除以 SCALE
+                            amt = float(o.get("amount", 0))
+                            p_bet += amt
+                            p_win += float(o.get("bonus", 0))
+                            if u_bet == 0: u_bet = amt
+                            
+                        # 检查详情是否有下一页
+                        if detail_page >= page_info.get("pageCount", 1):
+                            break
+                        detail_page += 1
+                    
+                    # 更新该期结果
+                    if p_no in real_bet_results:
+                        real_bet_results[p_no]['total_bet'] = p_bet
+                        real_bet_results[p_no]['unit_bet'] = u_bet
+                        real_bet_results[p_no]['win_amount'] = p_win
+                        real_bet_results[p_no]['profit'] = p_win - p_bet
+                        total_profit += (p_win - p_bet)
+                        
+                except Exception as e:
+                    self.progress_signal.emit(f"⚠️ 第{p_no}期明细获取异常: {e}")
                     continue
             
             self.finished_signal.emit(total_profit, real_bet_results)
