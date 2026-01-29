@@ -2863,11 +2863,16 @@ class Canada28Simulator(QMainWindow):
 
         # 获取用户设置的同步数量
         limit_text = self.combo_sync_limit.currentText()
-        if "全部" in limit_text:
+        if limit_text == "自定义":
+            limit = self.spin_sync_custom.value()
+        elif "全部" in limit_text:
             limit = 1000
         else:
             try:
-                limit = int(limit_text)
+                # 提取数字部分
+                import re
+                match = re.search(r'\d+', limit_text)
+                limit = int(match.group()) if match else 50
             except:
                 limit = 50
 
