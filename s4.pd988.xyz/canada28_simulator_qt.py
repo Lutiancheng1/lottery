@@ -311,7 +311,7 @@ class AccountSyncWorker(QThread):
             # 第二阶段：获取最近N期的详细明细
             self.progress_signal.emit("🔍 正在获取近期下单明细...")
             
-            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:20] # 每次最多同步最近20期明细，避免过慢
+            recent_periods = sorted(real_bet_results.keys(), reverse=True)[:limit] # 遵循用户设置的限制
             for idx, p_no in enumerate(recent_periods):
                 try:
                     self.progress_signal.emit(f"🔍 获取第{p_no}期明细 ({idx+1}/{len(recent_periods)})")
