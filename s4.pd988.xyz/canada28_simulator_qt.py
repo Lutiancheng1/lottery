@@ -1990,10 +1990,59 @@ class Canada28Simulator(QMainWindow):
         self.history_panel_group = QGroupBox("历史记录")
         layout = QVBoxLayout()
         
+        # --- 顶部控制与说明栏 ---
+        top_bar_layout = QHBoxLayout()
+        
         # 添加说明标签
-        info_label = QLabel("📊 表格显示最近50期投注记录 | 真实账户总盈亏请查看上方\"账单同步\"区域")
-        info_label.setStyleSheet("color: #666; font-size: 11px; padding: 5px;")
-        layout.addWidget(info_label)
+        self.lbl_table_info = QLabel("📊 历史投注记录")
+        self.lbl_table_info.setStyleSheet("color: #666; font-size: 11px; font-weight: bold;")
+        top_bar_layout.addWidget(self.lbl_table_info)
+        
+        top_bar_layout.addStretch()
+        
+        # --- 分页控制 (移至顶部) ---
+        self.btn_prev_page = QPushButton("⬅️")
+        self.btn_prev_page.setFixedWidth(40)
+        self.btn_prev_page.setToolTip("上一页")
+        self.btn_prev_page.clicked.connect(self.on_prev_page)
+        top_bar_layout.addWidget(self.btn_prev_page)
+        
+        self.lbl_page_info = QLabel("第 1 / 1 页")
+        self.lbl_page_info.setStyleSheet("font-size: 11px; color: #333;")
+        self.lbl_page_info.setAlignment(Qt.AlignCenter)
+        top_bar_layout.addWidget(self.lbl_page_info)
+        
+        self.btn_next_page = QPushButton("➡️")
+        self.btn_next_page.setFixedWidth(40)
+        self.btn_next_page.setToolTip("下一页")
+        self.btn_next_page.clicked.connect(self.on_next_page)
+        top_bar_layout.addWidget(self.btn_next_page)
+        
+        top_bar_layout.addSpacing(10)
+        
+        self.spin_page_jump = QSpinBox()
+        self.spin_page_jump.setRange(1, 1)
+        self.spin_page_jump.setFixedWidth(50)
+        self.spin_page_jump.setStyleSheet("font-size: 11px;")
+        top_bar_layout.addWidget(self.spin_page_jump)
+        
+        btn_jump = QPushButton("跳转")
+        btn_jump.setFixedWidth(40)
+        btn_jump.setStyleSheet("font-size: 11px;")
+        btn_jump.clicked.connect(self.on_jump_page)
+        top_bar_layout.addWidget(btn_jump)
+        
+        top_bar_layout.addSpacing(10)
+        
+        self.combo_page_size = QComboBox()
+        self.combo_page_size.addItems(["20", "50", "100", "200", "500"])
+        self.combo_page_size.setCurrentText("50")
+        self.combo_page_size.setFixedWidth(60)
+        self.combo_page_size.setStyleSheet("font-size: 11px;")
+        self.combo_page_size.currentTextChanged.connect(self.on_page_size_changed)
+        top_bar_layout.addWidget(self.combo_page_size)
+        
+        layout.addLayout(top_bar_layout)
         
         self.table = QTableWidget()
         self.table.setColumnCount(8)
@@ -2010,45 +2059,6 @@ class Canada28Simulator(QMainWindow):
         self.table.cellClicked.connect(self.on_table_cell_clicked) # 连接点击事件
         
         layout.addWidget(self.table)
-        
-        # --- 分页控制栏 ---
-        pagination_layout = QHBoxLayout()
-        
-        self.btn_prev_page = QPushButton("上一页")
-        self.btn_prev_page.clicked.connect(self.on_prev_page)
-        pagination_layout.addWidget(self.btn_prev_page)
-        
-        self.lbl_page_info = QLabel("第 1 / 1 页")
-        self.lbl_page_info.setAlignment(Qt.AlignCenter)
-        self.lbl_page_info.setMinimumWidth(100)
-        pagination_layout.addWidget(self.lbl_page_info)
-        
-        self.btn_next_page = QPushButton("下一页")
-        self.btn_next_page.clicked.connect(self.on_next_page)
-        pagination_layout.addWidget(self.btn_next_page)
-        
-        pagination_layout.addSpacing(20)
-        
-        pagination_layout.addWidget(QLabel("跳转到:"))
-        self.spin_page_jump = QSpinBox()
-        self.spin_page_jump.setRange(1, 1)
-        self.spin_page_jump.setFixedWidth(60)
-        pagination_layout.addWidget(self.spin_page_jump)
-        
-        btn_jump = QPushButton("前往")
-        btn_jump.clicked.connect(self.on_jump_page)
-        pagination_layout.addWidget(btn_jump)
-        
-        pagination_layout.addStretch()
-        
-        pagination_layout.addWidget(QLabel("每页显示:"))
-        self.combo_page_size = QComboBox()
-        self.combo_page_size.addItems(["20", "50", "100", "200", "500"])
-        self.combo_page_size.setCurrentText("50")
-        self.combo_page_size.currentTextChanged.connect(self.on_page_size_changed)
-        pagination_layout.addWidget(self.combo_page_size)
-        
-        layout.addLayout(pagination_layout)
         group = self.history_panel_group
         group.setLayout(layout)
         # self.simulator_layout.addWidget(group) # 移交init_ui管理
